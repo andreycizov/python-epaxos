@@ -1,6 +1,6 @@
 from typing import Set, SupportsInt
 
-from dsm.epaxos.state import Command, Slot, Ballot
+from dsm.epaxos_old.state import Command, Slot, Ballot
 
 
 class Packet:

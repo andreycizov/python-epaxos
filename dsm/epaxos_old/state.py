@@ -15,7 +15,7 @@ class Slot:
         return Ballot(epoch, 0, self.replica_id)
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.replica_id},{self.instance_id})'
+        return f'{self.__class__.__name__}({self.leader_id},{self.instance_id})'
 
 
 class Ballot:
@@ -28,7 +28,7 @@ class Ballot:
         return Ballot(self.epoch, self.b + 1, self.replica_id)
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.epoch},{self.b},{self.replica_id})'
+        return f'{self.__class__.__name__}({self.epoch},{self.b},{self.leader_id})'
 
     def tuple(self):
         return self.epoch, self.b, self.replica_id

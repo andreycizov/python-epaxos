@@ -82,11 +82,11 @@ class Replica(Peer):
                     self.do_explicit_prepare(msg.slot)
                 else:
                     logger.warning(
-                        f'Replica {self.replica_id}, slot {msg.slot} received NACK for unreasonable instance {inst}')
+                        f'Replica {self.leader_id}, slot {msg.slot} received NACK for unreasonable instance {inst}')
             else:
-                logger.warning(f'Replica {self.replica_id}, slot {msg.slot} is not known')
+                logger.warning(f'Replica {self.leader_id}, slot {msg.slot} is not known')
         else:
-            logger.warning(f'Replica {self.replica_id}, unknown packet {event.packet}')
+            logger.warning(f'Replica {self.leader_id}, unknown packet {event.packet}')
 
     def do_accept(self, slot, ballot, command, seq, deps):
         self.instances[slot] = Instance(
@@ -141,7 +141,7 @@ class Replica(Peer):
     def leader_preaccept_ack(self, sender, msg: PreAcceptAckReply):
         if msg.slot not in self.instances:
             logger.warning(
-                f'Replica {self.replica_id} received command as leader in slot {msg.slot} that it does not know of')
+                f'Replica {self.leader_id} received command as leader in slot {msg.slot} that it does not know of')
             return
 
         if msg.slot in self.instances and msg.ballot < self.instances[msg.slot].ballot:
@@ -169,7 +169,7 @@ class Replica(Peer):
 
                     self.do_accept(msg.slot, msg.ballot, msg.command, seq, deps)
         else:
-            logger.warning(f'Replica {self.replica_id} {msg.slot} invalid state {inst.state} for this transaction')
+            logger.warning(f'Replica {self.leader_id} {msg.slot} invalid state {inst.state} for this transaction')
 
     def replica_accept(self, sender, msg: AcceptRequest):
         if msg.slot in self.instances and msg.ballot < self.instances[msg.slot].ballot:
@@ -183,7 +183,7 @@ class Replica(Peer):
     def leader_accept_ack(self, msg: AcceptAckReply):
         if msg.slot not in self.instances:
             logger.warning(
-                f'Replica {self.replica_id} received command as leader in slot {msg.slot} that it does not know of')
+                f'Replica {self.leader_id} received command as leader in slot {msg.slot} that it does not know of')
             return
 
         if msg.slot in self.instances and msg.ballot < self.instances[msg.slot].ballot:
@@ -200,7 +200,7 @@ class Replica(Peer):
             if len(state.replies) >= self.quorum:
                 self.do_commit(msg.slot, msg.ballot, msg.command, inst.seq, inst.deps)
         else:
-            logger.warning(f'Replica {self.replica_id} {msg.slot} invalid state {inst.state} for this transaction')
+            logger.warning(f'Replica {self.leader_id} {msg.slot} invalid state {inst.state} for this transaction')
 
     def replica_commit(self, sender, msg: CommitRequest):
         if msg.slot in self.instances and msg.ballot < self.instances[msg.slot].ballot:
