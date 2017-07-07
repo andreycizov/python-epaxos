@@ -8,12 +8,25 @@ class Channel:
     def __init__(self):
         pass
 
-    def pre_accept_request(self, peer: SupportsInt, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: SupportsInt,
+    def pre_accept_request(self, peer: SupportsInt, slot: Slot, ballot: Ballot, command: AbstractCommand,
+                           seq: SupportsInt,
                            deps: Set[Slot]):
+        pass
+
+    def accept_request(self, peer: SupportsInt, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: SupportsInt,
+                       deps: Set[Slot]):
+        pass
+
+    def commit_request(self, peer: SupportsInt, slot: Slot, ballot: Ballot, seq: SupportsInt, command: AbstractCommand,
+                       deps: Set[Slot]):
         pass
 
     def prepare_request(self, peer: SupportsInt, slot: Slot, ballot: Ballot):
         pass
+
+    def client_response(self, client_peer: SupportsInt, command: AbstractCommand, slot: Slot):
+        pass
+
 
 class Peer:
     def __init__(self, ident: Optional[SupportsInt]):

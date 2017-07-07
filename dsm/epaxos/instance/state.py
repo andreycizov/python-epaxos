@@ -56,5 +56,20 @@ class Instance:
         self.deps = deps
         self.state = state
 
+    def set_ballot_next(self):
+        self.ballot = self.ballot.next()
+
+    def set_state(self, state: State):
+        assert state >= self.state
+        self.state = state
+
+    def set_deps(self, seq: SupportsInt, deps: Set[Slot]):
+        self.seq = seq
+        self.deps = deps
+
+    def set_noop(self):
+        self.command = Noop
+        self.set_deps(0, set())
+
     def __repr__(self):
         return f'{self.__class__.__name__}({self.ballot}, {self.command}, {self.seq}, {self.deps}, {self.state})'

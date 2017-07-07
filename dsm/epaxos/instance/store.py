@@ -1,7 +1,7 @@
-from typing import Dict
+from typing import Dict, SupportsInt, Set
 
 from dsm.epaxos.command.state import AbstractCommand
-from dsm.epaxos.instance.state import Slot, Instance
+from dsm.epaxos.instance.state import Slot, Instance, Ballot, State
 
 
 class InstanceStore:
@@ -11,8 +11,11 @@ class InstanceStore:
     def __getitem__(self, item: Slot):
         return self.instances[item]
 
-    def __setitem__(self, key: Slot, value: Instance):
-        self.instances[key] = value
+    def create(self, slot: Slot, ballot: Ballot, command, seq: SupportsInt, deps: Set[Slot]):
+        self.instances[slot] = Instance(ballot, command, seq, deps, State.PreAccepted)
+
+    # def __setitem__(self, key: Slot, value: Instance):
+    #     self.instances[key] = value
 
     def interferences(self, slot: Slot, command: AbstractCommand):
         """

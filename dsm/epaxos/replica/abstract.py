@@ -10,3 +10,4 @@ class Behaviour:
     ):
         self.state = state
         self.store = store
+
