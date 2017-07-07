@@ -1,4 +1,4 @@
-from typing import Dict, List, Set, Tuple, NamedTuple, Optional
+from typing import Dict, List, NamedTuple, Optional
 
 import logging
 from enum import Enum
@@ -37,7 +37,7 @@ class LeaderInstancePayload:
 class PreAcceptReply(NamedTuple):
     peer: int
     seq: int
-    deps: Set[Slot]
+    deps: List[Slot]
 
 
 class PreAcceptLeaderInstance(LeaderInstancePayload):
@@ -52,7 +52,7 @@ class PrepareReply(NamedTuple):
     ballot: Ballot
     command: AbstractCommand
     seq: int
-    deps: Set[Slot]
+    deps: List[Slot]
     state: State
 
 
@@ -61,6 +61,7 @@ class ExplicitPrepareLeaderInstance(LeaderInstancePayload):
 
     def __init__(self):
         self.replies = []  # type: List[PrepareReply]
+        self.replies_nack = 0
 
 
 class Leader(Behaviour):
@@ -100,19 +101,21 @@ class Leader(Behaviour):
     def _response_slot_state_check(self, slot: Slot, required_state: LeaderInstanceState):
         if slot not in self:
             logger.warning(
-                f'Replica `{self.state.peer}` Slot `{slot}` is not leading at this replica')
+                f'Leader `{self.state.peer}` Slot `{slot}` is not leading at this replica')
             return True
 
         if self[slot].state.name != required_state:
             logger.warning(
-                f'Replica `{self.state.peer}` Slot `{slot}` invalid leading state `{self[slot].state.name}` (REQUIRED: `{required_state}`)')
+                f'Leader `{self.state.peer}` Slot `{slot}` invalid leading state `{self[slot].state.name}` (REQUIRED: `{required_state}`)')
             return True
 
     def client_request(self, client_peer: int, command: AbstractCommand):
+        # Slot does not access other slots at all (apart from it's dependency checks)
+
         slot = Slot(self.state.ident, self.next_instance_id)
         self.next_instance_id += 1
 
-        deps = self.store.interferences(slot, command)
+        deps = self.store.dependencies(slot, command)
         seq = max({0} | {self.store[x].seq for x in deps}) + 1
 
         self.store.create(slot, slot.ballot(self.state.epoch), seq, deps)
@@ -126,7 +129,7 @@ class Leader(Behaviour):
         inst = self.store[slot]
 
         for peer in self.peers_fast:
-            # Timeouts on PreAcceptRequest are guaranteed to be handled by the Replica part of the algorithm
+            # Timeouts on PreAcceptRequest are guaranteed to be handled by the Acceptor part of the algorithm
             self.state.channel.pre_accept_request(peer, slot, inst.ballot, inst.command, inst.seq, inst.deps)
 
     def finalise_pre_accept(self, slot: Slot, replies: List[PreAcceptReply]):
@@ -167,7 +170,7 @@ class Leader(Behaviour):
         self.finalise_commit(slot)
 
     def finalise_commit(self, slot: Slot):
-        # We are no longer leading this request at all.
+        # We are no longer leading this request
         del self[slot]
 
     def begin_explicit_prepare(self, slot: Slot):
@@ -208,7 +211,7 @@ class Leader(Behaviour):
             self.store[slot].set_noop()
             self.begin_pre_accept(slot)
 
-    def pre_accept_response_ack(self, peer: int, slot: Slot, ballot: Ballot, seq: int, deps: Set[Slot]):
+    def pre_accept_response_ack(self, peer: int, slot: Slot, ballot: Ballot, seq: int, deps: List[Slot]):
         if self._response_slot_state_check(slot, LeaderInstanceState.PreAccept):
             return
 
@@ -228,7 +231,7 @@ class Leader(Behaviour):
         self.begin_explicit_prepare(slot)
 
     def prepare_response_ack(self, peer: int, slot: Slot, ballot: Ballot, command: AbstractCommand,
-                             seq: int, deps: Set[Slot], state: State):
+                             seq: int, deps: List[Slot], state: State):
         if self._response_slot_state_check(slot, LeaderInstanceState.ExplicitPrepare):
             return
 
@@ -239,5 +242,8 @@ class Leader(Behaviour):
             self.finalise_explicit_prepare(slot, l_inst.replies)
 
     def prepare_response_nack(self, peer: int, slot: Slot):
-        # TODO: What do we do with the nacknowledgement?
-        pass
+        l_inst = self[slot].state  # type: ExplicitPrepareLeaderInstance
+        l_inst.replies_nack += 1
+
+        if l_inst.replies_nack >= self.quorum_n:
+            self.begin_explicit_prepare(slot)

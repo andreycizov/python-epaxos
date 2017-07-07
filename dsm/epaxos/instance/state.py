@@ -1,8 +1,8 @@
-from typing import Set, SupportsInt, NamedTuple
+from typing import List, NamedTuple
 
 from enum import IntEnum
 
-from dsm.epaxos.command.state import AbstractCommand
+from dsm.epaxos.command.state import AbstractCommand, Noop
 
 
 class State(IntEnum):
@@ -35,7 +35,7 @@ class Ballot(NamedTuple):
 
 
 class Instance:
-    def __init__(self, ballot: Ballot, command: AbstractCommand, seq: SupportsInt, deps: Set[Slot], state: State):
+    def __init__(self, ballot: Ballot, command: AbstractCommand, seq: int, deps: List[Slot], state: State):
         self.ballot = ballot
         self.command = command
         self.seq = seq
@@ -49,13 +49,13 @@ class Instance:
         assert state >= self.state
         self.state = state
 
-    def set_deps(self, seq: SupportsInt, deps: Set[Slot]):
+    def set_deps(self, seq: int, deps: List[Slot]):
         self.seq = seq
         self.deps = deps
 
     def set_noop(self):
         self.command = Noop
-        self.set_deps(0, set())
+        self.set_deps(0, [])
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.ballot}, {self.command}, {self.seq}, {self.deps}, {self.state})'

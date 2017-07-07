@@ -1,4 +1,4 @@
-from typing import Optional, Set
+from typing import Optional, List
 
 from dsm.epaxos.command.state import AbstractCommand
 from dsm.epaxos.instance.state import Slot, Ballot
@@ -10,15 +10,15 @@ class Channel:
 
     def pre_accept_request(self, peer: int, slot: Slot, ballot: Ballot, command: AbstractCommand,
                            seq: int,
-                           deps: Set[Slot]):
+                           deps: List[Slot]):
         pass
 
     def accept_request(self, peer: int, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int,
-                       deps: Set[Slot]):
+                       deps: List[Slot]):
         pass
 
     def commit_request(self, peer: int, slot: Slot, ballot: Ballot, seq: int, command: AbstractCommand,
-                       deps: Set[Slot]):
+                       deps: List[Slot]):
         pass
 
     def prepare_request(self, peer: int, slot: Slot, ballot: Ballot):
@@ -33,7 +33,7 @@ class Peer:
         self.ident = ident
 
     def pre_accept_request(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int,
-                           deps: Set[Slot]):
+                           deps: List[Slot]):
         pass
 
     def prepare_request(self, slot: Slot, ballot: Ballot):
