@@ -53,6 +53,9 @@ class Instance:
         self.seq = seq
         self.deps = deps
 
+    def set_command(self, command: AbstractCommand):
+        self.command = command
+
     def set_noop(self):
         self.command = Noop
         self.set_deps(0, [])

@@ -1,4 +1,5 @@
-from typing import Dict, List, NamedTuple, Optional
+from itertools import groupby
+from typing import Dict, List, NamedTuple, Optional, Tuple
 
 import logging
 from enum import Enum
@@ -186,26 +187,46 @@ class Leader(Behaviour):
         l_inst.replies.append(PrepareReply(self.state.peer, inst.ballot, inst.command, inst.seq, inst.deps, inst.state))
 
     def finalise_explicit_prepare(self, slot: Slot, replies: List[PrepareReply]):
-        # TODO: ballot does not allow for a comparison operation, as of yet.
+        def select_reply_and_update(items: List[PrepareReply], state: State):
+            reply = [x for x in items if x.state == state][0]
+            self.store[slot].set_command(reply.command)
+            self.store[slot].set_deps(reply.seq, reply.deps)
+
         max_ballot = max(x.ballot for x in replies)
         replies = [x for x in replies if x.ballot == max_ballot]
 
         max_state = max(x.state for x in replies)
 
-        if any(x.state == State.Committed for x in replies):
-            # TODO: we would like to set (command, seq, deps here).
+        if max_state == State.Committed:
+            select_reply_and_update(replies, State.Committed)
             self.begin_commit(slot)
-        elif any(x.state == State.Accepted for x in replies):
-            # TODO: we would like to set (command, seq, deps here).
+        elif max_state == State.Accepted:
+            select_reply_and_update(replies, State.Accepted)
             self.begin_accept(slot)
-        elif len([x for x in replies if x.state == State.PreAccepted]) + 1 >= self.quorum_n:
-            # TODO: we would like to fix the conditions here.
-            # TODO: we would like to set (command, seq, deps here).
-            self.begin_accept(slot)
-        elif any(x.state == State.PreAccepted for x in replies):
-            # TODO: we would like to set (command, seq, deps here).
-            self[slot].allow_fast = False
-            self.begin_pre_accept(slot)
+        elif max_state == State.PreAccepted:
+            def key(x: PrepareReply):
+                return x.command, x.seq, x.deps
+
+            selected = sorted(replies, key=key)
+            selected = groupby(selected, key=key)
+            selected = [
+                (x, list(y))
+                for x, y in selected
+            ]  # type: List[Tuple[Tuple[AbstractCommand, int, List[int]], List[PrepareReply]]]
+            selected = [
+                y
+                for x, y in selected
+                if len(y) >= self.quorum_n - 1 and
+                   not any(z.peer == self.store[slot].ballot.leader_id for z in y)
+            ]
+
+            if len(selected):
+                select_reply_and_update(selected[0], State.PreAccepted)
+                self.begin_accept(slot)
+            else:
+                select_reply_and_update(replies, State.PreAccepted)
+                self[slot].allow_fast = False
+                self.begin_pre_accept(slot)
         else:
             self[slot].allow_fast = False
             self.store[slot].set_noop()
