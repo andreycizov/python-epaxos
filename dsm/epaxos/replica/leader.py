@@ -1,12 +1,11 @@
-from collections import namedtuple
-from typing import Dict, List, SupportsInt, Set, Tuple, NamedTuple, Optional
+from typing import Dict, List, Set, Tuple, NamedTuple, Optional
 
 import logging
 from enum import Enum
 from functools import reduce
 
 from dsm.epaxos.command.state import AbstractCommand
-from dsm.epaxos.instance.state import Instance, Slot, State, Ballot
+from dsm.epaxos.instance.state import Slot, State, Ballot
 from dsm.epaxos.instance.store import InstanceStore
 from dsm.epaxos.replica.abstract import Behaviour
 from dsm.epaxos.replica.state import ReplicaState
@@ -22,7 +21,7 @@ class LeaderInstanceState(Enum):
 
 
 class LeaderInstance:
-    def __init__(self, peer_client: Optional[SupportsInt] = None, allow_fast=True):
+    def __init__(self, peer_client: Optional[int] = None, allow_fast=True):
         self.state = LeaderInstancePayload()
         self.peer_client = peer_client
         self.allow_fast = allow_fast
@@ -36,8 +35,8 @@ class LeaderInstancePayload:
 
 
 class PreAcceptReply(NamedTuple):
-    peer: SupportsInt
-    seq: SupportsInt
+    peer: int
+    seq: int
     deps: Set[Slot]
 
 
@@ -49,10 +48,10 @@ class PreAcceptLeaderInstance(LeaderInstancePayload):
 
 
 class PrepareReply(NamedTuple):
-    peer: SupportsInt
+    peer: int
     ballot: Ballot
     command: AbstractCommand
-    seq: SupportsInt
+    seq: int
     deps: Set[Slot]
     state: State
 
@@ -109,7 +108,7 @@ class Leader(Behaviour):
                 f'Replica `{self.state.peer}` Slot `{slot}` invalid leading state `{self[slot].state.name}` (REQUIRED: `{required_state}`)')
             return True
 
-    def client_request(self, client_peer: SupportsInt, command: AbstractCommand):
+    def client_request(self, client_peer: int, command: AbstractCommand):
         slot = Slot(self.state.ident, self.next_instance_id)
         self.next_instance_id += 1
 
@@ -209,7 +208,7 @@ class Leader(Behaviour):
             self.store[slot].set_noop()
             self.begin_pre_accept(slot)
 
-    def pre_accept_response_ack(self, peer: SupportsInt, slot: Slot, ballot: Ballot, seq: SupportsInt, deps: Set[Slot]):
+    def pre_accept_response_ack(self, peer: int, slot: Slot, ballot: Ballot, seq: int, deps: Set[Slot]):
         if self._response_slot_state_check(slot, LeaderInstanceState.PreAccept):
             return
 
@@ -222,14 +221,14 @@ class Leader(Behaviour):
         if len(l_inst.replies) + 1 >= self.quorum_n:
             self.finalise_pre_accept(slot, l_inst.replies)
 
-    def pre_accept_response_nack(self, peer: SupportsInt, slot: Slot):
+    def pre_accept_response_nack(self, peer: int, slot: Slot):
         if self._response_slot_state_check(slot, LeaderInstanceState.PreAccept):
             return
 
         self.begin_explicit_prepare(slot)
 
-    def prepare_response_ack(self, peer: SupportsInt, slot: Slot, ballot: Ballot, command: AbstractCommand,
-                         seq: SupportsInt, deps: Set[Slot], state: State):
+    def prepare_response_ack(self, peer: int, slot: Slot, ballot: Ballot, command: AbstractCommand,
+                             seq: int, deps: Set[Slot], state: State):
         if self._response_slot_state_check(slot, LeaderInstanceState.ExplicitPrepare):
             return
 
@@ -239,6 +238,6 @@ class Leader(Behaviour):
         if len(l_inst.replies) >= self.quorum_n:
             self.finalise_explicit_prepare(slot, l_inst.replies)
 
-    def prepare_response_nack(self, peer: SupportsInt, slot: Slot):
+    def prepare_response_nack(self, peer: int, slot: Slot):
         # TODO: What do we do with the nacknowledgement?
         pass

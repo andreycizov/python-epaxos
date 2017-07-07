@@ -1,4 +1,4 @@
-from typing import SupportsInt, Set
+from typing import Set
 
 from dsm.epaxos.network.peer import Channel
 
@@ -7,10 +7,10 @@ class ReplicaState:
     def __init__(
         self,
         channel: Channel,
-        epoch: SupportsInt,
-        peer: SupportsInt,
-        quorum_fast: Set[SupportsInt],
-        quorum_full: Set[SupportsInt],
+        epoch: int,
+        peer: int,
+        quorum_fast: Set[int],
+        quorum_full: Set[int],
         live: bool = True,
     ):
         self.channel = channel

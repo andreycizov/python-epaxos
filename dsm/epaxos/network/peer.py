@@ -1,4 +1,4 @@
-from typing import Optional, SupportsInt, Set
+from typing import Optional, Set
 
 from dsm.epaxos.command.state import AbstractCommand
 from dsm.epaxos.instance.state import Slot, Ballot
@@ -8,31 +8,31 @@ class Channel:
     def __init__(self):
         pass
 
-    def pre_accept_request(self, peer: SupportsInt, slot: Slot, ballot: Ballot, command: AbstractCommand,
-                           seq: SupportsInt,
+    def pre_accept_request(self, peer: int, slot: Slot, ballot: Ballot, command: AbstractCommand,
+                           seq: int,
                            deps: Set[Slot]):
         pass
 
-    def accept_request(self, peer: SupportsInt, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: SupportsInt,
+    def accept_request(self, peer: int, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int,
                        deps: Set[Slot]):
         pass
 
-    def commit_request(self, peer: SupportsInt, slot: Slot, ballot: Ballot, seq: SupportsInt, command: AbstractCommand,
+    def commit_request(self, peer: int, slot: Slot, ballot: Ballot, seq: int, command: AbstractCommand,
                        deps: Set[Slot]):
         pass
 
-    def prepare_request(self, peer: SupportsInt, slot: Slot, ballot: Ballot):
+    def prepare_request(self, peer: int, slot: Slot, ballot: Ballot):
         pass
 
-    def client_response(self, client_peer: SupportsInt, command: AbstractCommand, slot: Slot):
+    def client_response(self, client_peer: int, command: AbstractCommand):
         pass
 
 
 class Peer:
-    def __init__(self, ident: Optional[SupportsInt]):
+    def __init__(self, ident: Optional[int]):
         self.ident = ident
 
-    def pre_accept_request(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: SupportsInt,
+    def pre_accept_request(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int,
                            deps: Set[Slot]):
         pass
 

@@ -1,4 +1,4 @@
-from typing import Set, SupportsInt
+from typing import Set, SupportsInt, NamedTuple
 
 from enum import IntEnum
 
@@ -11,10 +11,9 @@ class State(IntEnum):
     Committed = 4
 
 
-class Slot:
-    def __init__(self, replica_id, instance_id):
-        self.replica_id = replica_id
-        self.instance_id = instance_id
+class Slot(NamedTuple):
+    replica_id: int
+    instance_id: int
 
     def ballot(self, epoch):
         return Ballot(epoch, 0, self.replica_id)
@@ -22,30 +21,17 @@ class Slot:
     def __repr__(self):
         return f'{self.__class__.__name__}({self.replica_id},{self.instance_id})'
 
-    def tuple(self):
-        return self.replica_id, self.instance_id
 
-    def __lt__(self, other: 'Slot'):
-        return self.tuple() < other.tuple()
-
-
-class Ballot:
-    def __init__(self, epoch, b, leader_id):
-        self.epoch = epoch
-        self.b = b
-        self.leader_id = leader_id
+class Ballot(NamedTuple):
+    epoch: int
+    b: int
+    leader_id: int
 
     def next(self):
         return Ballot(self.epoch, self.b + 1, self.leader_id)
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.epoch},{self.b},{self.leader_id})'
-
-    def tuple(self):
-        return self.epoch, self.b, self.leader_id
-
-    def __lt__(self, other: 'Ballot'):
-        return self.tuple() < other.tuple()
 
 
 class Instance:
