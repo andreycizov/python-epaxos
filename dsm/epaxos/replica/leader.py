@@ -22,17 +22,17 @@ class LeaderInstanceState(Enum):
     ExplicitPrepare = 10
 
 
-class LeaderInstance:
+class LeaderState:
     def __init__(self, peer_client: Optional[int] = None, allow_fast=True):
-        self.state = LeaderInstancePayload()
+        self.phase = LeaderStatePhase()
         self.peer_client = peer_client
         self.allow_fast = allow_fast
 
-    def set_state(self, state: LeaderInstancePayload):
-        self.state = state
+    def set_state(self, state: LeaderStatePhase):
+        self.phase = state
 
 
-class LeaderInstancePayload:
+class LeaderStatePhase:
     name = LeaderInstanceState.Initial
 
 
@@ -42,7 +42,7 @@ class PreAcceptReply(NamedTuple):
     deps: List[Slot]
 
 
-class PreAcceptLeaderInstance(LeaderInstancePayload):
+class PreAcceptLeaderPhase(LeaderStatePhase):
     name = LeaderInstanceState.PreAccept
 
     def __init__(self):
@@ -58,7 +58,7 @@ class PrepareReply(NamedTuple):
     state: State
 
 
-class ExplicitPrepareLeaderInstance(LeaderInstancePayload):
+class ExplicitPrepareLeaderPhase(LeaderStatePhase):
     name = LeaderInstanceState.ExplicitPrepare
 
     def __init__(self):
@@ -73,7 +73,7 @@ class Leader(Behaviour, LeaderInterface):
         store: InstanceStore,
     ):
         super().__init__(state, store)
-        self.leading = {}  # type: Dict[Slot, LeaderInstance]
+        self.leading = {}  # type: Dict[Slot, LeaderState]
         self.next_instance_id = 0
 
     def __contains__(self, item):
@@ -82,7 +82,7 @@ class Leader(Behaviour, LeaderInterface):
     def __getitem__(self, item: Slot):
         return self.leading[item]
 
-    def __setitem__(self, key: Slot, value: LeaderInstance):
+    def __setitem__(self, key: Slot, value: LeaderState):
         self.leading[key] = value
 
     def __delitem__(self, key: Slot):
@@ -111,17 +111,17 @@ class Leader(Behaviour, LeaderInterface):
     def _response_slot_state_check(self, slot: Slot, required_state: LeaderInstanceState):
         if slot not in self:
             logger.warning(
-                f'Leader `{self.state.peer}` Slot `{slot}` is not leading at this replica')
+                f'Leader `{self.phase.replica_id}` Slot `{slot}` is not leading at this replica')
             return True
 
-        if self[slot].state.name != required_state:
+        if self[slot].phase.name != required_state:
             logger.warning(
-                f'Leader `{self.state.peer}` Slot `{slot}` invalid leading state `{self[slot].state.name}` (REQUIRED: `{required_state}`)')
+                f'Leader `{self.phase.replica_id}` Slot `{slot}` invalid leading phase `{self[slot].phase.name}` (REQUIRED: `{required_state}`)')
             return True
 
-    def _start_leadership(self, slot: Slot, state: LeaderInstancePayload, client_peer: Optional[int] = None):
+    def _start_leadership(self, slot: Slot, state: LeaderStatePhase, client_peer: Optional[int] = None):
         if slot not in self:
-            self[slot] = LeaderInstance(client_peer)
+            self[slot] = LeaderState(client_peer)
         self[slot].set_state(state)
 
     def _stop_leadership(self, slot: Slot):
@@ -145,11 +145,11 @@ class Leader(Behaviour, LeaderInterface):
 
         self.store.create(slot, slot.ballot(self.state.epoch), command, 1, [])
 
-        self[slot] = LeaderInstance(client_peer)
+        self[slot] = LeaderState(client_peer)
         self.begin_pre_accept(slot)
 
     def begin_pre_accept(self, slot: Slot):
-        self._start_leadership(slot, PreAcceptLeaderInstance())
+        self._start_leadership(slot, PreAcceptLeaderPhase())
 
         self.store.update_deps(slot)
 
@@ -200,16 +200,18 @@ class Leader(Behaviour, LeaderInterface):
         self._stop_leadership(slot)
 
     def begin_explicit_prepare(self, slot: Slot):
-        self._start_leadership(slot, ExplicitPrepareLeaderInstance())
+        self._start_leadership(slot, ExplicitPrepareLeaderPhase())
 
+        # TODO: Ballot should include our replica ID as well.
         self.store[slot].set_ballot_next()
+        self.store[slot].ballot.replica_id = self.state.peer
 
         for peer in self.peers_full:
             self.state.channel.prepare_request(peer, slot, self.store[slot].ballot)
 
         # Fake sending a PrepareRequest to ourselves
         inst = self.store[slot]
-        l_inst = self[slot].state  # type: ExplicitPrepareLeaderInstance
+        l_inst = self[slot].phase  # type: ExplicitPrepareLeaderPhase
         l_inst.replies.append(PrepareReply(self.state.peer, inst.ballot, inst.command, inst.seq, inst.deps, inst.state))
 
     def finalise_explicit_prepare(self, slot: Slot, replies: List[PrepareReply]):
@@ -265,7 +267,7 @@ class Leader(Behaviour, LeaderInterface):
         if self.store[slot].ballot < ballot:
             self.pre_accept_response_nack(peer, slot)
 
-        l_inst = self[slot].state  # type: PreAcceptLeaderInstance
+        l_inst = self[slot].phase  # type: PreAcceptLeaderPhase
         l_inst.replies.append(PreAcceptReply(peer, seq, deps))
 
         if len(l_inst.replies) + 1 >= self.quorum_fast:
@@ -282,14 +284,14 @@ class Leader(Behaviour, LeaderInterface):
         if self._response_slot_state_check(slot, LeaderInstanceState.ExplicitPrepare):
             return
 
-        l_inst = self[slot].state  # type: ExplicitPrepareLeaderInstance
+        l_inst = self[slot].phase  # type: ExplicitPrepareLeaderPhase
         l_inst.replies.append(PrepareReply(peer, ballot, command, seq, deps, state))
 
         if len(l_inst.replies) >= self.quorum_slow:
             self.finalise_explicit_prepare(slot, l_inst.replies)
 
     def prepare_response_nack(self, peer: int, slot: Slot):
-        l_inst = self[slot].state  # type: ExplicitPrepareLeaderInstance
+        l_inst = self[slot].phase  # type: ExplicitPrepareLeaderPhase
         l_inst.replies_nack += 1
 
         if l_inst.replies_nack >= self.quorum_slow:

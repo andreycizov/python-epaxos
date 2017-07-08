@@ -97,7 +97,7 @@ def plex(channel_write_map, channel_read_map):
     for k, v in channel_write_map.items():
         for item in v.pop_while():
             if isinstance(item, Send):
-                print(f'{k}\t->\t{item.peer}\t{item.packet}')
+                print(f'{k}\t->\t{item.replica_id}\t{item.packet}')
                 channel_read_map[item.peer].notify(Receive(k, item.packet))
 
 

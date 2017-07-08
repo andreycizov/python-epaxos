@@ -25,13 +25,13 @@ class Slot(NamedTuple):
 class Ballot(NamedTuple):
     epoch: int
     b: int
-    leader_id: int
+    replica_id: int
 
     def next(self):
-        return Ballot(self.epoch, self.b + 1, self.leader_id)
+        return Ballot(self.epoch, self.b + 1, self.replica_id)
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.epoch},{self.b},{self.leader_id})'
+        return f'{self.__class__.__name__}({self.epoch},{self.b},{self.replica_id})'
 
 
 class Instance:
@@ -52,6 +52,9 @@ class Instance:
         assert state >= self.state
         self.state = state
 
+        if self.state == State.Committed:
+            raise NotImplementedError('Notify all of the instances that depend on this instance that there is a new committed instance')
+
     def set_deps(self, seq: int, deps: List[Slot]):
         # TODO: every time we set deps, we check if we know about all of the specific slots in here.
         # TODO: if we don't - we then create an instance with an empty command and an initial ballot number for
@@ -68,4 +71,4 @@ class Instance:
         self.set_deps(0, [])
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.ballot}, {self.command}, {self.seq}, {self.deps}, {self.state})'
+        return f'{self.__class__.__name__}({self.ballot}, {self.command}, {self.seq}, {self.deps}, {self.phase})'
