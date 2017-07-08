@@ -42,6 +42,9 @@ class Instance:
         self.deps = deps
         self.state = state
 
+    def set_ballot(self, ballot: Ballot):
+        self.ballot = ballot
+
     def set_ballot_next(self):
         self.ballot = self.ballot.next()
 
@@ -50,6 +53,10 @@ class Instance:
         self.state = state
 
     def set_deps(self, seq: int, deps: List[Slot]):
+        # TODO: every time we set deps, we check if we know about all of the specific slots in here.
+        # TODO: if we don't - we then create an instance with an empty command and an initial ballot number for
+        # TODO: our current epoch (so that we could then start ExplicitPrepare for it).
+        raise NotImplementedError('')
         self.seq = seq
         self.deps = deps
 

@@ -8,6 +8,7 @@ from functools import reduce
 from dsm.epaxos.command.state import AbstractCommand
 from dsm.epaxos.instance.state import Slot, State, Ballot
 from dsm.epaxos.instance.store import InstanceStore
+from dsm.epaxos.network.peer import LeaderInterface
 from dsm.epaxos.replica.abstract import Behaviour
 from dsm.epaxos.replica.state import ReplicaState
 
@@ -65,7 +66,7 @@ class ExplicitPrepareLeaderInstance(LeaderInstancePayload):
         self.replies_nack = 0
 
 
-class Leader(Behaviour):
+class Leader(Behaviour, LeaderInterface):
     def __init__(
         self,
         state: ReplicaState,
@@ -96,8 +97,16 @@ class Leader(Behaviour):
         return {x for x in self.state.quorum_full if x != self.state.peer}
 
     @property
-    def quorum_n(self):
-        return int(len(self.peers_fast) / 2) + 1
+    def quorum_f(self):
+        return int(len(self.peers_fast) / 2)
+
+    @property
+    def quorum_slow(self):
+        return self.quorum_f + 1
+
+    @property
+    def quorum_fast(self):
+        return self.quorum_f * 2
 
     def _response_slot_state_check(self, slot: Slot, required_state: LeaderInstanceState):
         if slot not in self:
@@ -110,22 +119,39 @@ class Leader(Behaviour):
                 f'Leader `{self.state.peer}` Slot `{slot}` invalid leading state `{self[slot].state.name}` (REQUIRED: `{required_state}`)')
             return True
 
+    def _start_leadership(self, slot: Slot, state: LeaderInstancePayload, client_peer: Optional[int] = None):
+        if slot not in self:
+            self[slot] = LeaderInstance(client_peer)
+        self[slot].set_state(state)
+
+    def _stop_leadership(self, slot: Slot):
+        del self[slot]
+
     def client_request(self, client_peer: int, command: AbstractCommand):
         # Slot does not access other slots at all (apart from it's dependency checks)
 
         slot = Slot(self.state.ident, self.next_instance_id)
         self.next_instance_id += 1
 
-        deps = self.store.dependencies(slot, command)
-        seq = max({0} | {self.store[x].seq for x in deps}) + 1
+        # TODO: -> if deps contains a command we do not yet know about - the command is pre-created as is expected to be committed first.
 
-        self.store.create(slot, slot.ballot(self.state.epoch), seq, deps)
+
+
+        # TODO: every time we receive a pre_accept - we would like to update seq and deps.
+        # TODO: but Acceptor may only need to specifically set the instance to something (command, seq, deps)
+
+        # TODO: pre_accept|pre_accept_reply -> update seq,deps
+        # TODO: accept|commit|... -> set seq,deps
+
+        self.store.create(slot, slot.ballot(self.state.epoch), command, 1, [])
 
         self[slot] = LeaderInstance(client_peer)
         self.begin_pre_accept(slot)
 
     def begin_pre_accept(self, slot: Slot):
-        self[slot].set_state(PreAcceptLeaderInstance())
+        self._start_leadership(slot, PreAcceptLeaderInstance())
+
+        self.store.update_deps(slot)
 
         inst = self.store[slot]
 
@@ -171,11 +197,11 @@ class Leader(Behaviour):
         self.finalise_commit(slot)
 
     def finalise_commit(self, slot: Slot):
-        # We are no longer leading this request
-        del self[slot]
+        self._stop_leadership(slot)
 
     def begin_explicit_prepare(self, slot: Slot):
-        self[slot].set_state(ExplicitPrepareLeaderInstance())
+        self._start_leadership(slot, ExplicitPrepareLeaderInstance())
+
         self.store[slot].set_ballot_next()
 
         for peer in self.peers_full:
@@ -216,7 +242,7 @@ class Leader(Behaviour):
             selected = [
                 y
                 for x, y in selected
-                if len(y) >= self.quorum_n - 1 and
+                if len(y) >= self.quorum_slow - 1 and
                    not any(z.peer == self.store[slot].ballot.leader_id for z in y)
             ]
 
@@ -242,7 +268,7 @@ class Leader(Behaviour):
         l_inst = self[slot].state  # type: PreAcceptLeaderInstance
         l_inst.replies.append(PreAcceptReply(peer, seq, deps))
 
-        if len(l_inst.replies) + 1 >= self.quorum_n:
+        if len(l_inst.replies) + 1 >= self.quorum_fast:
             self.finalise_pre_accept(slot, l_inst.replies)
 
     def pre_accept_response_nack(self, peer: int, slot: Slot):
@@ -259,12 +285,12 @@ class Leader(Behaviour):
         l_inst = self[slot].state  # type: ExplicitPrepareLeaderInstance
         l_inst.replies.append(PrepareReply(peer, ballot, command, seq, deps, state))
 
-        if len(l_inst.replies) >= self.quorum_n:
+        if len(l_inst.replies) >= self.quorum_slow:
             self.finalise_explicit_prepare(slot, l_inst.replies)
 
     def prepare_response_nack(self, peer: int, slot: Slot):
         l_inst = self[slot].state  # type: ExplicitPrepareLeaderInstance
         l_inst.replies_nack += 1
 
-        if l_inst.replies_nack >= self.quorum_n:
+        if l_inst.replies_nack >= self.quorum_slow:
             self.begin_explicit_prepare(slot)
