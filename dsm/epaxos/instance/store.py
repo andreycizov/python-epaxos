@@ -38,3 +38,22 @@ class InstanceStore:
             for inst_slot, v in self.instances.items()
             if (self[slot].command.ident // 1000) == (v.command.ident // 1000) and inst_slot != slot
         )
+
+    def prepare(self, slot: Slot):
+        # TODO: implicit for: new_deps; client_request
+
+        # todo: set self[slot] = ((epoch, 0, slot.leader_id), NO_COMMAND,
+        pass
+
+    def pre_accepted(self, slot: Slot):
+        pass
+
+    def accepted(self, slot: Slot):
+        pass
+
+    def commited(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int, deps: List[Slot]):
+        # TODO: issue is that for all instances that depend on this instance - we would like to notify them.
+
+
+        pass
+        pass

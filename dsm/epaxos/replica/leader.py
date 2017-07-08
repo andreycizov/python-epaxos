@@ -211,8 +211,8 @@ class Leader(Behaviour, LeaderInterface):
 
         # Fake sending a PrepareRequest to ourselves
         inst = self.store[slot]
-        l_inst = self[slot].phase  # type: ExplicitPrepareLeaderPhase
-        l_inst.replies.append(PrepareReply(self.state.peer, inst.ballot, inst.command, inst.seq, inst.deps, inst.state))
+        phase = self[slot].phase  # type: ExplicitPrepareLeaderPhase
+        phase.replies.append(PrepareReply(self.state.peer, inst.ballot, inst.command, inst.seq, inst.deps, inst.state))
 
     def finalise_explicit_prepare(self, slot: Slot, replies: List[PrepareReply]):
         def select_reply_and_update(items: List[PrepareReply], state: State):
@@ -267,11 +267,11 @@ class Leader(Behaviour, LeaderInterface):
         if self.store[slot].ballot < ballot:
             self.pre_accept_response_nack(peer, slot)
 
-        l_inst = self[slot].phase  # type: PreAcceptLeaderPhase
-        l_inst.replies.append(PreAcceptReply(peer, seq, deps))
+        phase = self[slot].phase  # type: PreAcceptLeaderPhase
+        phase.replies.append(PreAcceptReply(peer, seq, deps))
 
-        if len(l_inst.replies) + 1 >= self.quorum_fast:
-            self.finalise_pre_accept(slot, l_inst.replies)
+        if len(phase.replies) + 1 >= self.quorum_fast:
+            self.finalise_pre_accept(slot, phase.replies)
 
     def pre_accept_response_nack(self, peer: int, slot: Slot):
         if self._response_slot_state_check(slot, LeaderInstanceState.PreAccept):
@@ -284,15 +284,15 @@ class Leader(Behaviour, LeaderInterface):
         if self._response_slot_state_check(slot, LeaderInstanceState.ExplicitPrepare):
             return
 
-        l_inst = self[slot].phase  # type: ExplicitPrepareLeaderPhase
-        l_inst.replies.append(PrepareReply(peer, ballot, command, seq, deps, state))
+        phase = self[slot].phase  # type: ExplicitPrepareLeaderPhase
+        phase.replies.append(PrepareReply(peer, ballot, command, seq, deps, state))
 
-        if len(l_inst.replies) >= self.quorum_slow:
-            self.finalise_explicit_prepare(slot, l_inst.replies)
+        if len(phase.replies) >= self.quorum_slow:
+            self.finalise_explicit_prepare(slot, phase.replies)
 
     def prepare_response_nack(self, peer: int, slot: Slot):
-        l_inst = self[slot].phase  # type: ExplicitPrepareLeaderPhase
-        l_inst.replies_nack += 1
+        phase = self[slot].phase  # type: ExplicitPrepareLeaderPhase
+        phase.replies_nack += 1
 
-        if l_inst.replies_nack >= self.quorum_slow:
+        if phase.replies_nack >= self.quorum_slow:
             self.begin_explicit_prepare(slot)
