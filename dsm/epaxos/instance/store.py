@@ -6,6 +6,7 @@ from dsm.epaxos.instance.state import Slot, Instance, Ballot, State
 
 class InstanceStore:
     def __init__(self):
+        self.instances_deps = {}
         self.instances = {}  # type: Dict[Slot, Instance]
 
     def __contains__(self, item: Slot):

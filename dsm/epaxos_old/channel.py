@@ -13,7 +13,7 @@ class CommunicationEvent(Event):
         self.packet = packet
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.peer}, {self.packet})'
+        return f'{self.__class__.__name__}({self.replica_id}, {self.packet})'
 
 
 class Send(CommunicationEvent):

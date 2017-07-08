@@ -8,14 +8,14 @@ class ReplicaState:
         self,
         channel: Channel,
         epoch: int,
-        peer: int,
+        replica_id: int,
         quorum_fast: Set[int],
         quorum_full: Set[int],
         live: bool = True,
     ):
         self.channel = channel
         self.epoch = epoch
-        self.peer = peer
+        self.replica_id = replica_id
         self.quorum_fast = quorum_fast
         self.quorum_full = quorum_full
         self.live = live
