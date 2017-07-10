@@ -5,6 +5,29 @@ from enum import IntEnum
 from dsm.epaxos.command.state import AbstractCommand, Noop
 
 
+class Slot(NamedTuple):
+    replica_id: int
+    instance_id: int
+
+    def ballot_initial(self, epoch):
+        return Ballot(epoch, 0, self.replica_id)
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.replica_id},{self.instance_id})'
+
+
+class Ballot(NamedTuple):
+    epoch: int
+    b: int
+    replica_id: int
+
+    def next(self):
+        return Ballot(self.epoch, self.b + 1, self.replica_id)
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.epoch},{self.b},{self.replica_id})'
+
+
 class StateType(IntEnum):
     # We do not have a command for this state yet.
     Prepared = 0
@@ -45,26 +68,3 @@ class AcceptedState(PostPreparedState):
 
 class CommittedState(PostPreparedState):
     type = StateType.Committed
-
-
-class Slot(NamedTuple):
-    replica_id: int
-    instance_id: int
-
-    def ballot_initial(self, epoch):
-        return Ballot(epoch, 0, self.replica_id)
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.replica_id},{self.instance_id})'
-
-
-class Ballot(NamedTuple):
-    epoch: int
-    b: int
-    replica_id: int
-
-    def next(self):
-        return Ballot(self.epoch, self.b + 1, self.replica_id)
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.epoch},{self.b},{self.replica_id})'

@@ -25,6 +25,10 @@ class LeaderStateType(Enum):
     ExplicitPrepare = 10
 
 
+class LeaderStatePhase:
+    name = LeaderStateType.Initial
+
+
 class LeaderState:
     def __init__(self, peer_client: Optional[int] = None, allow_fast=True):
         self.phase = LeaderStatePhase()
@@ -33,10 +37,6 @@ class LeaderState:
 
     def set_state(self, state: LeaderStatePhase):
         self.phase = state
-
-
-class LeaderStatePhase:
-    name = LeaderStateType.Initial
 
 
 class PreAcceptReply(NamedTuple):
