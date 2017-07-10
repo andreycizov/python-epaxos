@@ -5,8 +5,10 @@ import logging
 from enum import Enum
 from functools import reduce
 
+from copy import copy
+
 from dsm.epaxos.command.state import AbstractCommand, Noop
-from dsm.epaxos.instance.state import Slot, StateType, Ballot, PostPreparedState, PreparedState
+from dsm.epaxos.instance.state import Slot, StateType, Ballot, PostPreparedState, PreparedState, PreAcceptedState
 from dsm.epaxos.instance.store import InstanceStore
 from dsm.epaxos.network.peer import LeaderInterface
 from dsm.epaxos.replica.abstract import Behaviour
@@ -177,13 +179,14 @@ class Leader(Behaviour, LeaderInterface):
             seq = max({x.seq for x in replies})
             deps = sorted(reduce(lambda a, b: a | b, (x.deps for x in replies), set()))
 
-            inst = self.store[slot]
+            inst = copy(self.store[slot])
 
-            assert isinstance(inst, PostPreparedState)
+            assert isinstance(inst, PreAcceptedState)
 
             inst.seq = seq
             inst.deps = deps
 
+            self.store[slot] = inst
             self.begin_accept(slot)
 
     def begin_accept(self, slot: Slot):
@@ -217,7 +220,7 @@ class Leader(Behaviour, LeaderInterface):
     def begin_explicit_prepare(self, slot: Slot):
         self._start_leadership(slot, ExplicitPrepareLeaderPhase())
 
-        self.store.ballot_next(slot)
+        self.store.increase_ballot(slot)
 
         for peer in self.peers_full:
             self.state.channel.prepare_request(peer, slot, self.store[slot].ballot)

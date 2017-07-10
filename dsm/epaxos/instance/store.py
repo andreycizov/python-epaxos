@@ -1,18 +1,24 @@
 from typing import Dict, List
 
+from copy import copy
+
+from dsm.epaxos.command.deps.store import AbstractDepsStore
 from dsm.epaxos.command.state import AbstractCommand, Noop
 from dsm.epaxos.instance.state import Slot, Ballot, StateType, PreparedState, PostPreparedState, \
     PreAcceptedState, AcceptedState, CommittedState, InstanceState
 from dsm.epaxos.replica.state import ReplicaState
+from dsm.epaxos.timeout.store import TimeoutStore
 
 
 class InstanceStore:
-    def __init__(self, state: ReplicaState):
+    def __init__(self, state: ReplicaState, deps_store: AbstractDepsStore):
         self.state = state
+        self.deps_store = deps_store
+        self.timeout_store = TimeoutStore(state, self)
 
-        self.instances_deps = {}
         self.instances = {}  # type: Dict[Slot, InstanceState]
-        self.to_execute = []  # type: List[Slot]
+
+        # TODO: list all of the instances that are pending execution.
 
     def __contains__(self, item: Slot):
         return item in self.instances
@@ -23,36 +29,20 @@ class InstanceStore:
         assert new_inst.type >= inst.type and new_inst.ballot >= inst.ballot
 
         self.instances[slot] = new_inst
-        # TODO: check if command is committed
-        # TODO: check if state < committed and add it to timeout queue.
+
+        self.deps_store.update(slot, inst, new_inst)
+        self.timeout_store.update(slot, inst, new_inst)
 
     def __getitem__(self, slot: Slot) -> InstanceState:
         if slot not in self:
             self[slot] = PreparedState(slot, slot.ballot_initial(self.state.epoch))
         return self[slot]
 
-    def dependencies(self, slot: Slot, command: AbstractCommand) -> List[Slot]:
-        """
-        Currently we assume that the dependencies between commands may only be transitional
-        """
-        if command == Noop:
-            return []
+    def increase_ballot(self, slot: Slot):
+        inst = copy(self[slot])
+        inst.ballot = Ballot(self.state.epoch, inst.ballot.b + 1, self.state.replica_id)
 
-        def dependency_filter(v):
-            if isinstance(v, PostPreparedState):
-                return (command.ident // 1000) == (v.command.ident // 1000) and v.slot != slot
-            else:
-                return False
-
-        return sorted(
-            inst_slot
-            for inst_slot, v in self.instances.items()
-            if dependency_filter(v)
-        )
-
-    def ballot_next(self, slot: Slot):
-        ballot = self[slot].ballot
-        self[slot].ballot = Ballot(self.state.epoch, ballot.b + 1, self.state.replica_id)
+        self[slot] = inst
 
     def prepare(self, slot: Slot):
         assert slot not in self
@@ -61,7 +51,7 @@ class InstanceStore:
     def pre_accept(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int = 0, deps: List[Slot] = list()):
         assert StateType.PreAccepted >= self[slot].type
 
-        local_deps = self.dependencies(slot, command)
+        local_deps = self.deps_store.query(slot, command)
 
         slot_seq = max((self[x].seq for x in local_deps), default=0) + 1
         slot_seq = max([seq, slot_seq])

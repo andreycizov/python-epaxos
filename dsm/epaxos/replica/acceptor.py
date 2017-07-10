@@ -3,7 +3,7 @@ from typing import List
 import logging
 
 from dsm.epaxos.command.state import AbstractCommand
-from dsm.epaxos.instance.state import Slot, Ballot, StateType
+from dsm.epaxos.instance.state import Slot, Ballot
 from dsm.epaxos.instance.store import InstanceStore
 from dsm.epaxos.network.peer import AcceptorInterface
 from dsm.epaxos.replica.abstract import Behaviour
