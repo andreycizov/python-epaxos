@@ -1,8 +1,8 @@
 from typing import Dict, List
 
 from dsm.epaxos.command.state import AbstractCommand, Noop
-from dsm.epaxos.instance.state import Slot, Instance, Ballot, StateType, PreparedState, PostPreparedState, \
-    PreAcceptedState, AcceptedState, CommittedState
+from dsm.epaxos.instance.state import Slot, Ballot, StateType, PreparedState, PostPreparedState, \
+    PreAcceptedState, AcceptedState, CommittedState, InstanceState
 from dsm.epaxos.replica.state import ReplicaState
 
 
@@ -11,30 +11,25 @@ class InstanceStore:
         self.state = state
 
         self.instances_deps = {}
-        self.instances = {}  # type: Dict[Slot, PreparedState]
+        self.instances = {}  # type: Dict[Slot, InstanceState]
         self.to_execute = []  # type: List[Slot]
 
     def __contains__(self, item: Slot):
         return item in self.instances
 
-    def __getitem__(self, slot: Slot) -> PreparedState:
-        if slot not in self.instances[slot]:
-            self.instances[slot] = PreparedState(slot, slot.ballot_initial(self.state.epoch))
-        return self.instances[slot]
+    def __setitem__(self, slot: Slot, new_inst: InstanceState):
+        inst = self[slot]
 
-    # def create(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int, deps: List[Slot]):
-    #     self.instances[slot] = Instance(ballot, command, seq, deps, StateType.PreAccepted)
-    #
-    # def update_deps(self, slot: Slot, add_seq: int = 0, add_deps: List[Slot] = []):
-    #     # TODO: what if one of our deps does not exist in our history ?
-    #
-    #     deps = self.dependencies(slot)
-    #     deps = sorted(set(add_deps + deps))
-    #
-    #     seq = max((self[x].seq for x in deps), default=0) + 1
-    #     seq = max([seq, add_seq])
-    #
-    #     self[slot].set_deps(seq, deps)
+        assert new_inst.type >= inst.type and new_inst.ballot >= inst.ballot
+
+        self.instances[slot] = new_inst
+        # TODO: check if command is committed
+        # TODO: check if state < committed and add it to timeout queue.
+
+    def __getitem__(self, slot: Slot) -> InstanceState:
+        if slot not in self:
+            self[slot] = PreparedState(slot, slot.ballot_initial(self.state.epoch))
+        return self[slot]
 
     def dependencies(self, slot: Slot, command: AbstractCommand) -> List[Slot]:
         """
@@ -43,18 +38,17 @@ class InstanceStore:
         if command == Noop:
             return []
 
+        def dependency_filter(v):
+            if isinstance(v, PostPreparedState):
+                return (command.ident // 1000) == (v.command.ident // 1000) and v.slot != slot
+            else:
+                return False
+
         return sorted(
             inst_slot
             for inst_slot, v in self.instances.items()
-            if isinstance(v, PostPreparedState) and (
-                (command.ident // 1000) == (v.command.ident // 1000) and inst_slot != slot)
+            if dependency_filter(v)
         )
-
-    # def prepare(self, slot: Slot):
-    #     # TODO: implicit for: new_deps; client_request
-    #
-    #     # todo: set self[slot] = ((epoch, 0, slot.leader_id), NO_COMMAND,
-    #     pass
 
     def ballot_next(self, slot: Slot):
         ballot = self[slot].ballot
@@ -67,26 +61,23 @@ class InstanceStore:
     def pre_accept(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int = 0, deps: List[Slot] = list()):
         assert StateType.PreAccepted >= self[slot].type
 
-        slot_deps = self.dependencies(slot, command)
-        slot_deps = sorted(set(slot_deps + deps))
+        local_deps = self.dependencies(slot, command)
 
-        slot_seq = max((self[x].seq for x in deps), default=0) + 1
+        slot_seq = max((self[x].seq for x in local_deps), default=0) + 1
         slot_seq = max([seq, slot_seq])
 
-        slot_inst = PreAcceptedState(slot, ballot, command, slot_seq, slot_deps)
+        remote_deps = sorted(set(local_deps + deps))
 
-        self.instances[slot] = slot_inst
+        slot_inst = PreAcceptedState(slot, ballot, command, slot_seq, remote_deps)
+
+        self[slot] = slot_inst
 
         return slot_inst
 
     def _post_pre_accept(self, cls, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int, deps: List[Slot]):
-        inst = self[slot]
-
         new_inst = cls(slot, ballot, command, seq, deps)
 
-        assert new_inst.type >= inst.type and new_inst.ballot >= inst.ballot
-
-        self.instances[slot] = new_inst
+        self[slot] = new_inst
 
         return new_inst
 
