@@ -1,4 +1,4 @@
-from typing import NamedTuple, List
+from typing import NamedTuple, List, Dict
 
 from dsm.epaxos.command.deps.store import AbstractDepsStore
 from dsm.epaxos.command.state import AbstractCommand, Noop

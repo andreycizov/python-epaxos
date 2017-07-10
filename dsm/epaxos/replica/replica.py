@@ -10,11 +10,13 @@ class Replica(Leader, Acceptor):
         state: ReplicaState,
         store: InstanceStore
     ):
-        self.store = store
         Leader.__init__(self, state, store)
         Acceptor.__init__(self, state, store)
 
     def check_timeouts(self):
+        # TODO: practically we would like to change the timeout capacity here.
+        # TODO: ....
+
         for slot in self.store.timeout_store.query():
             self.begin_explicit_prepare(slot)
 

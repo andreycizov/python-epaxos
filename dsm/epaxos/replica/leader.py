@@ -147,9 +147,6 @@ class Leader(Behaviour, LeaderInterface):
         slot = Slot(self.state.ident, self.next_instance_id)
         self.next_instance_id += 1
 
-        self.store.prepare(slot)
-        self[slot] = LeaderState(client_peer)
-
         self.begin_pre_accept(slot, command)
 
     def begin_pre_accept(self, slot: Slot, command: Optional[AbstractCommand] = None):

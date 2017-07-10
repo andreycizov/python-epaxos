@@ -1,6 +1,6 @@
 import heapq
-from datetime import datetime
-from typing import NamedTuple, List, Dict
+from datetime import datetime, timedelta
+from typing import NamedTuple, List, Dict, Optional
 
 from dsm.epaxos.instance.state import Slot, InstanceState, StateType, Ballot
 from dsm.epaxos.replica.state import ReplicaState
@@ -30,6 +30,12 @@ class TimeoutStore:
             heapq.heappush(self.timeouts, last_state)
 
         self.last_states[slot] = last_state
+
+    def minimum_wait(self) -> Optional[timedelta]:
+        if len(self.timeouts):
+            return max(self.timeouts[0].time - self.now(), timedelta(0))
+        else:
+            return None
 
     def query(self) -> List[Slot]:
         now = self.now()
