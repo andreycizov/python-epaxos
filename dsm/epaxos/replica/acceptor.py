@@ -1,7 +1,7 @@
 from typing import List
 
 from dsm.epaxos.command.state import AbstractCommand
-from dsm.epaxos.instance.state import Slot, Ballot, State
+from dsm.epaxos.instance.state import Slot, Ballot, StateType
 from dsm.epaxos.instance.store import InstanceStore
 from dsm.epaxos.network.peer import AcceptorInterface
 from dsm.epaxos.replica.abstract import Behaviour
@@ -16,36 +16,33 @@ class Acceptor(Behaviour, AcceptorInterface):
     ):
         super().__init__(state, store)
 
-    def _check_if_known(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int, deps: List[Slot],
-                        state: State):
-        if slot not in self.store:
-            self.store.create(slot, ballot, command, seq, deps)
-            self.store[slot].set_state(state)
-        elif ballot < self.store[slot].ballot:
-            return True
-        else:
-            inst = self.store[slot]
+    def _check_if_known(self, slot: Slot, ballot: Ballot):
+        inst = self.store[slot]
 
-            inst.set_command(command)
-            inst.set_ballot(ballot)
-            inst.set_deps(seq, deps)
-            inst.set_state(state)
+        if inst.ballot > ballot:
+            return None
+        else:
+            return inst
 
     def pre_accept_request(
         self, peer: int, slot: Slot, ballot: Ballot, command: AbstractCommand,
         seq: int,
         deps: List[Slot]):
 
-        #
+        inst = self._check_if_known(slot, ballot)
 
-        if slot not in self.store:
-            self.store.create(slot, ballot, command, 0, [])
-
-        raise NotImplementedError()
+        if inst is None:
+            self.state.channel.pre_accept_response_nack(peer, slot)
+        else:
+            inst = self.store.pre_accept(slot, ballot, command, seq, deps)
+            self.state.channel.pre_accept_response_ack(peer, slot, inst.ballot, inst.seq, inst.deps)
 
     def accept_request(self, peer: int, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int,
                        deps: List[Slot]):
-        raise NotImplementedError()
+        inst = self._check_if_known(slot, ballot)
+
+        if inst is None:
+            self.state.channel.acc
 
     def commit_request(self, peer: int, slot: Slot, ballot: Ballot, seq: int, command: AbstractCommand,
                        deps: List[Slot]):

@@ -1,7 +1,7 @@
 from typing import List
 
 from dsm.epaxos.command.state import AbstractCommand
-from dsm.epaxos.instance.state import Slot, Ballot, State
+from dsm.epaxos.instance.state import Slot, Ballot, StateType
 
 
 class AcceptorInterface:
@@ -33,7 +33,7 @@ class LeaderInterface:
         raise NotImplementedError()
 
     def prepare_response_ack(self, peer: int, slot: Slot, ballot: Ballot, command: AbstractCommand,
-                             seq: int, deps: List[Slot], state: State):
+                             seq: int, deps: List[Slot], state: StateType):
         raise NotImplementedError()
 
     def prepare_response_nack(self, peer: int, slot: Slot):

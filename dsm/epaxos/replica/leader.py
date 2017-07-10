@@ -5,8 +5,8 @@ import logging
 from enum import Enum
 from functools import reduce
 
-from dsm.epaxos.command.state import AbstractCommand
-from dsm.epaxos.instance.state import Slot, State, Ballot
+from dsm.epaxos.command.state import AbstractCommand, Noop
+from dsm.epaxos.instance.state import Slot, StateType, Ballot, PostPreparedState, PreparedState
 from dsm.epaxos.instance.store import InstanceStore
 from dsm.epaxos.network.peer import LeaderInterface
 from dsm.epaxos.replica.abstract import Behaviour
@@ -15,7 +15,7 @@ from dsm.epaxos.replica.state import ReplicaState
 logger = logging.getLogger(__name__)
 
 
-class LeaderInstanceState(Enum):
+class LeaderStateType(Enum):
     Initial = 0
     PreAccept = 1
 
@@ -33,7 +33,7 @@ class LeaderState:
 
 
 class LeaderStatePhase:
-    name = LeaderInstanceState.Initial
+    name = LeaderStateType.Initial
 
 
 class PreAcceptReply(NamedTuple):
@@ -43,7 +43,7 @@ class PreAcceptReply(NamedTuple):
 
 
 class PreAcceptLeaderPhase(LeaderStatePhase):
-    name = LeaderInstanceState.PreAccept
+    name = LeaderStateType.PreAccept
 
     def __init__(self):
         self.replies = []  # type: List[PreAcceptReply]
@@ -55,11 +55,11 @@ class PrepareReply(NamedTuple):
     command: AbstractCommand
     seq: int
     deps: List[Slot]
-    state: State
+    state: StateType
 
 
 class ExplicitPrepareLeaderPhase(LeaderStatePhase):
-    name = LeaderInstanceState.ExplicitPrepare
+    name = LeaderStateType.ExplicitPrepare
 
     def __init__(self):
         self.replies = []  # type: List[PrepareReply]
@@ -108,7 +108,7 @@ class Leader(Behaviour, LeaderInterface):
     def quorum_fast(self):
         return self.quorum_f * 2
 
-    def _response_slot_state_check(self, slot: Slot, required_state: LeaderInstanceState):
+    def _response_slot_state_check(self, slot: Slot, required_state: LeaderStateType):
         if slot not in self:
             logger.warning(
                 f'Leader `{self.phase.replica_id}` Slot `{slot}` is not leading at this replica')
@@ -133,31 +133,27 @@ class Leader(Behaviour, LeaderInterface):
         slot = Slot(self.state.ident, self.next_instance_id)
         self.next_instance_id += 1
 
-        # TODO: -> if deps contains a command we do not yet know about - the command is pre-created as is expected to be committed first.
-
-
-
-        # TODO: every time we receive a pre_accept - we would like to update seq and deps.
-        # TODO: but Acceptor may only need to specifically set the instance to something (command, seq, deps)
-
-        # TODO: pre_accept|pre_accept_reply -> update seq,deps
-        # TODO: accept|commit|... -> set seq,deps
-
-        self.store.create(slot, slot.ballot(self.state.epoch), command, 1, [])
-
+        self.store.prepare(slot)
         self[slot] = LeaderState(client_peer)
-        self.begin_pre_accept(slot)
 
-    def begin_pre_accept(self, slot: Slot):
+        self.begin_pre_accept(slot, command)
+
+    def begin_pre_accept(self, slot: Slot, command: Optional[AbstractCommand] = None):
         self._start_leadership(slot, PreAcceptLeaderPhase())
 
-        self.store.update_deps(slot)
+        inst = self.store[slot]
+
+        if command:
+            self.store.pre_accept(slot, inst.ballot, command)
+        else:
+            assert isinstance(inst, PostPreparedState)
+            self.store.pre_accept(slot, inst.ballot, inst.command)
 
         inst = self.store[slot]
 
         for peer in self.peers_fast:
             # Timeouts on PreAcceptRequest are guaranteed to be handled by the Acceptor part of the algorithm
-            self.state.channel.pre_accept_request(peer, slot, inst.ballot, inst.command, inst.seq, inst.deps)
+            self.state.channel.pre_accept_request(peer, slot, inst.ballot_initial, inst.command, inst.seq, inst.deps)
 
     def finalise_pre_accept(self, slot: Slot, replies: List[PreAcceptReply]):
         if self[slot].allow_fast and (
@@ -167,15 +163,21 @@ class Leader(Behaviour, LeaderInterface):
             self.begin_commit(slot)
         else:
             seq = max({x.seq for x in replies})
-            deps = reduce(lambda a, b: a | b, (x.deps for x in replies), set())
+            deps = sorted(reduce(lambda a, b: a | b, (x.deps for x in replies), set()))
 
-            self.store[slot].set_deps(seq, deps)
+            inst = self.store[slot]
+
+            assert isinstance(inst, PostPreparedState)
+
+            inst.seq = seq
+            inst.deps = deps
 
             self.begin_accept(slot)
 
     def begin_accept(self, slot: Slot):
         inst = self.store[slot]
-        inst.set_state(State.Accepted)
+
+        self.store.accept(slot, inst.ballot, inst.command, inst.seq, inst.deps)
 
         for peer in self.peers_full:
             self.state.channel.accept_request(peer, slot, inst.ballot, inst.command, inst.seq, inst.deps)
@@ -189,7 +191,8 @@ class Leader(Behaviour, LeaderInterface):
 
     def begin_commit(self, slot: Slot):
         inst = self.store[slot]
-        inst.set_state(State.Committed)
+
+        self.store.commit(slot, inst.ballot, inst.command, inst.seq, inst.deps)
 
         for peer in self.peers_full:
             self.state.channel.commit_request(peer, slot, inst.ballot, inst.command, inst.seq, inst.deps)
@@ -202,36 +205,34 @@ class Leader(Behaviour, LeaderInterface):
     def begin_explicit_prepare(self, slot: Slot):
         self._start_leadership(slot, ExplicitPrepareLeaderPhase())
 
-        # TODO: Ballot should include our replica ID as well.
-        self.store[slot].set_ballot_next()
-        self.store[slot].ballot.replica_id = self.state.peer
+        self.store.ballot_next(slot)
 
         for peer in self.peers_full:
             self.state.channel.prepare_request(peer, slot, self.store[slot].ballot)
 
         # Fake sending a PrepareRequest to ourselves
         inst = self.store[slot]
-        phase = self[slot].phase  # type: ExplicitPrepareLeaderPhase
-        phase.replies.append(PrepareReply(self.state.peer, inst.ballot, inst.command, inst.seq, inst.deps, inst.state))
+
+        if isinstance(inst.type, PostPreparedState):
+            phase = self[slot].phase  # type: ExplicitPrepareLeaderPhase
+            phase.replies.append(
+                PrepareReply(self.state.replica_id, inst.ballot, inst.command, inst.seq, inst.deps, inst.state))
 
     def finalise_explicit_prepare(self, slot: Slot, replies: List[PrepareReply]):
-        def select_reply_and_update(items: List[PrepareReply], state: State):
-            reply = [x for x in items if x.state == state][0]
-            self.store[slot].set_command(reply.command)
-            self.store[slot].set_deps(reply.seq, reply.deps)
-
         max_ballot = max(x.ballot for x in replies)
         replies = [x for x in replies if x.ballot == max_ballot]
 
         max_state = max(x.state for x in replies)
 
-        if max_state == State.Committed:
-            select_reply_and_update(replies, State.Committed)
+        if max_state == StateType.Committed:
+            reply = [x for x in replies if x.state == StateType.Committed][0]
+            self.store.commit(slot, reply.ballot, reply.command, reply.seq, reply.deps)
             self.begin_commit(slot)
-        elif max_state == State.Accepted:
-            select_reply_and_update(replies, State.Accepted)
+        elif max_state == StateType.Accepted:
+            reply = [x for x in replies if x.state == StateType.Accepted][0]
+            self.store.accept(slot, reply.ballot, reply.command, reply.seq, reply.deps)
             self.begin_accept(slot)
-        elif max_state == State.PreAccepted:
+        elif max_state == StateType.PreAccepted:
             def key(x: PrepareReply):
                 return x.command, x.seq, x.deps
 
@@ -245,43 +246,44 @@ class Leader(Behaviour, LeaderInterface):
                 y
                 for x, y in selected
                 if len(y) >= self.quorum_slow - 1 and
-                   not any(z.peer == self.store[slot].ballot.leader_id for z in y)
+                   not any(z.peer == self.store[slot].ballot_initial.leader_id for z in y)
             ]
 
             if len(selected):
-                select_reply_and_update(selected[0], State.PreAccepted)
+                reply = selected[0][0]
+                self.store.pre_accept(slot, reply.ballot, reply.command, reply.seq, reply.deps)
                 self.begin_accept(slot)
             else:
-                select_reply_and_update(replies, State.PreAccepted)
+                reply = [x for x in replies if x.state == StateType.PreAccepted][0]
+                self.store.pre_accept(slot, reply.ballot, reply.command, reply.seq, reply.deps)
                 self[slot].allow_fast = False
                 self.begin_pre_accept(slot)
         else:
             self[slot].allow_fast = False
-            self.store[slot].set_noop()
-            self.begin_pre_accept(slot)
+            self.begin_pre_accept(slot, Noop)
 
     def pre_accept_response_ack(self, peer: int, slot: Slot, ballot: Ballot, seq: int, deps: List[Slot]):
-        if self._response_slot_state_check(slot, LeaderInstanceState.PreAccept):
+        if self._response_slot_state_check(slot, LeaderStateType.PreAccept):
             return
 
         if self.store[slot].ballot < ballot:
             self.pre_accept_response_nack(peer, slot)
+        else:
+            phase = self[slot].phase  # type: PreAcceptLeaderPhase
+            phase.replies.append(PreAcceptReply(peer, seq, deps))
 
-        phase = self[slot].phase  # type: PreAcceptLeaderPhase
-        phase.replies.append(PreAcceptReply(peer, seq, deps))
-
-        if len(phase.replies) + 1 >= self.quorum_fast:
-            self.finalise_pre_accept(slot, phase.replies)
+            if len(phase.replies) + 1 >= self.quorum_fast:
+                self.finalise_pre_accept(slot, phase.replies)
 
     def pre_accept_response_nack(self, peer: int, slot: Slot):
-        if self._response_slot_state_check(slot, LeaderInstanceState.PreAccept):
+        if self._response_slot_state_check(slot, LeaderStateType.PreAccept):
             return
 
         self.begin_explicit_prepare(slot)
 
     def prepare_response_ack(self, peer: int, slot: Slot, ballot: Ballot, command: AbstractCommand,
-                             seq: int, deps: List[Slot], state: State):
-        if self._response_slot_state_check(slot, LeaderInstanceState.ExplicitPrepare):
+                             seq: int, deps: List[Slot], state: StateType):
+        if self._response_slot_state_check(slot, LeaderStateType.ExplicitPrepare):
             return
 
         phase = self[slot].phase  # type: ExplicitPrepareLeaderPhase
