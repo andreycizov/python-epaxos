@@ -49,7 +49,7 @@ class Acceptor(Behaviour, AcceptorInterface):
             self.state.channel.accept_response_nack(peer, slot)
         else:
             inst = self.store.accept(slot, ballot, command, seq, deps)
-            self.state.channel.accept_response_ack(peer, slot, inst.ballot, inst.seq, inst.deps)
+            self.state.channel.accept_response_ack(peer, slot, inst.ballot)
 
     def commit_request(self, peer: int, slot: Slot, ballot: Ballot, seq: int, command: AbstractCommand,
                        deps: List[Slot]):

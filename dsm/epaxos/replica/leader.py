@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 class LeaderStateType(Enum):
     Initial = 0
     PreAccept = 1
+    Accept = 2
 
     ExplicitPrepare = 10
 
@@ -49,7 +50,18 @@ class PreAcceptLeaderPhase(LeaderStatePhase):
         self.replies = []  # type: List[PreAcceptReply]
 
 
-class PrepareReply(NamedTuple):
+class AcceptReply(NamedTuple):
+    peer: int
+
+
+class AcceptLeaderPhase(LeaderStatePhase):
+    name = LeaderStateType.Accept
+
+    def __init__(self):
+        self.replies = []  # type: List[AcceptReply]
+
+
+class ExplicitPrepareReply(NamedTuple):
     peer: int
     ballot: Ballot
     command: AbstractCommand
@@ -62,7 +74,7 @@ class ExplicitPrepareLeaderPhase(LeaderStatePhase):
     name = LeaderStateType.ExplicitPrepare
 
     def __init__(self):
-        self.replies = []  # type: List[PrepareReply]
+        self.replies = []  # type: List[ExplicitPrepareReply]
         self.replies_nack = 0
 
 
@@ -216,9 +228,9 @@ class Leader(Behaviour, LeaderInterface):
         if isinstance(inst.type, PostPreparedState):
             phase = self[slot].phase  # type: ExplicitPrepareLeaderPhase
             phase.replies.append(
-                PrepareReply(self.state.replica_id, inst.ballot, inst.command, inst.seq, inst.deps, inst.state))
+                ExplicitPrepareReply(self.state.replica_id, inst.ballot, inst.command, inst.seq, inst.deps, inst.state))
 
-    def finalise_explicit_prepare(self, slot: Slot, replies: List[PrepareReply]):
+    def finalise_explicit_prepare(self, slot: Slot, replies: List[ExplicitPrepareReply]):
         max_ballot = max(x.ballot for x in replies)
         replies = [x for x in replies if x.ballot == max_ballot]
 
@@ -233,7 +245,7 @@ class Leader(Behaviour, LeaderInterface):
             self.store.accept(slot, reply.ballot, reply.command, reply.seq, reply.deps)
             self.begin_accept(slot)
         elif max_state == StateType.PreAccepted:
-            def key(x: PrepareReply):
+            def key(x: ExplicitPrepareReply):
                 return x.command, x.seq, x.deps
 
             selected = sorted(replies, key=key)
@@ -241,7 +253,7 @@ class Leader(Behaviour, LeaderInterface):
             selected = [
                 (x, list(y))
                 for x, y in selected
-            ]  # type: List[Tuple[Tuple[AbstractCommand, int, List[int]], List[PrepareReply]]]
+            ]  # type: List[Tuple[Tuple[AbstractCommand, int, List[int]], List[ExplicitPrepareReply]]]
             selected = [
                 y
                 for x, y in selected
@@ -281,13 +293,32 @@ class Leader(Behaviour, LeaderInterface):
 
         self.begin_explicit_prepare(slot)
 
+    def accept_response_ack(self, peer: int, slot: Slot, ballot: Ballot):
+        if self._response_slot_state_check(slot, LeaderStateType.Accept):
+            return
+
+        if self.store[slot].ballot < ballot:
+            self.accept_response_nack(peer, slot)
+        else:
+            phase = self[slot].phase  # type: AcceptLeaderPhase
+            phase.replies.append(AcceptReply(peer))
+
+            if len(phase.replies) >= self.quorum_f:
+                self.begin_accept(slot)
+
+    def accept_response_nack(self, peer: int, slot: Slot):
+        if self._response_slot_state_check(slot, LeaderStateType.Accept):
+            return
+
+        self.begin_explicit_prepare(slot)
+
     def prepare_response_ack(self, peer: int, slot: Slot, ballot: Ballot, command: AbstractCommand,
                              seq: int, deps: List[Slot], state: StateType):
         if self._response_slot_state_check(slot, LeaderStateType.ExplicitPrepare):
             return
 
         phase = self[slot].phase  # type: ExplicitPrepareLeaderPhase
-        phase.replies.append(PrepareReply(peer, ballot, command, seq, deps, state))
+        phase.replies.append(ExplicitPrepareReply(peer, ballot, command, seq, deps, state))
 
         if len(phase.replies) >= self.quorum_slow:
             self.finalise_explicit_prepare(slot, phase.replies)

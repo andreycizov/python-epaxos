@@ -32,7 +32,7 @@ class LeaderInterface:
     def pre_accept_response_nack(self, peer: int, slot: Slot):
         raise NotImplementedError()
 
-    def accept_response_ack(self, peer: int, slot: Slot, ballot: Ballot, seq: int, deps: List[Slot]):
+    def accept_response_ack(self, peer: int, slot: Slot, ballot: Ballot):
         raise NotImplementedError()
 
     def accept_response_nack(self, peer: int, slot: Slot):
