@@ -11,10 +11,10 @@ from dsm.epaxos.timeout.store import TimeoutStore
 
 
 class InstanceStore:
-    def __init__(self, state: ReplicaState, deps_store: AbstractDepsStore):
+    def __init__(self, state: ReplicaState, deps_store: AbstractDepsStore, timeout_store: TimeoutStore):
         self.state = state
         self.deps_store = deps_store
-        self.timeout_store = TimeoutStore(state, self)
+        self.timeout_store = timeout_store
 
         self.instances = {}  # type: Dict[Slot, InstanceState]
 
