@@ -35,9 +35,11 @@ class Acceptor(Behaviour, AcceptorInterface):
 
         inst = self._check_if_known(slot, ballot)
 
-        if inst is None:
+        if inst is None or inst.type > StateType.PreAccepted:
             self.state.channel.pre_accept_response_nack(peer, slot)
         else:
+            # Responding as an Acceptor should cancel our Leadership State (we will receive packets out of order)
+            self._stop_leadership(slot)
             inst = self.store.pre_accept(slot, ballot, command, seq, deps)
             self.state.channel.pre_accept_response_ack(peer, slot, inst.ballot, inst.seq, inst.deps)
 
@@ -45,29 +47,33 @@ class Acceptor(Behaviour, AcceptorInterface):
                        deps: List[Slot]):
         inst = self._check_if_known(slot, ballot)
 
-        if inst is None:
+        if inst is None or inst.type > StateType.Accepted:
             self.state.channel.accept_response_nack(peer, slot)
         else:
-            if isinstance(inst, CommittedState):
-                self.store.increase_ballot(slot, ballot)
-            else:
-                inst = self.store.accept(slot, ballot, command, seq, deps)
+            self._stop_leadership(slot)
+            inst = self.store.accept(slot, ballot, command, seq, deps)
             self.state.channel.accept_response_ack(peer, slot, inst.ballot)
 
     def commit_request(self, peer: int, slot: Slot, ballot: Ballot, seq: int, command: AbstractCommand,
                        deps: List[Slot]):
         inst = self._check_if_known(slot, ballot)
 
-        if inst is None:
-            logger.warning(
-                f'Acceptor `{self.state.replica_id}` Slot `{slot}` Ballot {ballot} < {self.store[slot].ballot}')
+        # We check for the StateType here, since if were required to Commit after having already committed -
+        # then the leader of ExplicitPrepare phase has missed our reply.
+
+        if inst is None or inst.type > StateType.Committed:
+            pass
+            # logger.warning(
+            #     f'Acceptor `{self.state.replica_id}` Slot `{slot}` Ballot {ballot} < {self.store[slot].ballot}')
         else:
+            self._stop_leadership(slot)
             self.store.commit(slot, ballot, command, seq, deps)
 
     def prepare_request(self, peer: int, slot: Slot, ballot: Ballot):
         inst = self._check_if_known(slot, ballot, True)
 
         if inst is None:
+            self._stop_leadership(slot)
             self.state.channel.prepare_response_nack(peer, slot)
         else:
             self.state.channel.prepare_response_ack(peer, slot, inst.ballot, inst.command, inst.seq, inst.deps, inst.type)

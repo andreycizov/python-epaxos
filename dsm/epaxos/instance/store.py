@@ -18,6 +18,8 @@ class InstanceStore:
 
         self.instances = {}  # type: Dict[Slot, InstanceState]
 
+        self.last_committed = {}  # type: Dict[int, Slot]
+
         # TODO: list all of the instances that are pending execution.
 
     def __contains__(self, item: Slot):
@@ -32,6 +34,23 @@ class InstanceStore:
 
         self.deps_store.update(slot, inst, new_inst)
         self.timeout_store.update(slot, inst, new_inst)
+
+        if new_inst.type == StateType.Committed:
+            # TODO: try to execute the command here. Command execution will imply ordering and will allow us to
+            # TODO: truncate the commands.
+
+            # TODO: we may execute this algorithm only IFF Comamnd is executed (this way the ordering will always imply
+            # TODO: proper ordering -> or will it not?
+
+            if slot.replica_id not in self.last_committed:
+                self.last_committed[slot.replica_id] = Slot(slot.replica_id, -1)
+
+            last_committed_slot = self.last_committed[slot.replica_id]
+
+            next_committed_slot = Slot(last_committed_slot.replica_id, last_committed_slot.instance_id + 1)
+
+            if slot == next_committed_slot:
+                self.last_committed[slot.replica_id] = slot
 
     def __getitem__(self, slot: Slot) -> InstanceState:
         if slot not in self:
@@ -55,7 +74,8 @@ class InstanceStore:
         return self[slot]
 
     def pre_accept(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int = 0, deps: List[Slot] = list()):
-        assert StateType.PreAccepted >= self[slot].type
+        assert StateType.PreAccepted >= self[slot].type and ballot >= self[slot].ballot, (
+        (slot, ballot, command, seq, deps), self[slot])
 
         local_deps = self.deps_store.query(slot, command)
 
@@ -71,6 +91,9 @@ class InstanceStore:
         return slot_inst
 
     def _post_pre_accept(self, cls, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int, deps: List[Slot]):
+        assert cls.type >= self[slot].type and ballot >= self[slot].ballot, (
+        (slot, ballot, command, seq, deps), self[slot])
+
         new_inst = cls(slot, ballot, command, seq, deps)
 
         self[slot] = new_inst

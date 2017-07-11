@@ -1,16 +1,25 @@
 from multiprocessing.pool import Pool
 
-from dsm.epaxos.network.zeromq import replica_server, ReplicaAddress, replica_client
+from dsm.epaxos.network.zeromq.impl import replica_server, ReplicaAddress, replica_client
 
 replicas = {
-    1: ReplicaAddress('tcp://0.0.0.0:50001', 'tcp://0.0.0.0:60001'),
-    2: ReplicaAddress('tcp://0.0.0.0:50002', 'tcp://0.0.0.0:60002'),
-    3: ReplicaAddress('tcp://0.0.0.0:50003', 'tcp://0.0.0.0:60003'),
+    1: ReplicaAddress('tcp://0.0.0.0:60001'),
+    2: ReplicaAddress('tcp://0.0.0.0:60002'),
+    3: ReplicaAddress('tcp://0.0.0.0:60003'),
+    4: ReplicaAddress('tcp://0.0.0.0:60004'),
+    5: ReplicaAddress('tcp://0.0.0.0:60005'),
 }
 
 clients = [
     103,
-    104
+    104,
+    105,
+    106,
+    107,
+    # 108,
+    # 109,
+    # 110,
+    # 111,
 ]
 
 

@@ -124,13 +124,13 @@ class Leader(Behaviour, LeaderInterface):
 
     def _response_slot_state_check(self, slot: Slot, required_state: LeaderStateType):
         if slot not in self:
-            logger.warning(
-                f'Leader `{self.state.replica_id}` Slot `{slot}` is not leading <anymore> at this replica')
+            # logger.warning(
+            #     f'Leader `{self.state.replica_id}` Slot `{slot}` is not leading <anymore> at this replica')
             return True
 
         if self[slot].phase.name != required_state:
-            logger.warning(
-                f'Leader `{self.state.replica_id}` Slot `{slot}` invalid leading phase `{self[slot].phase.name}` (REQUIRED: `{required_state}`)')
+            # logger.warning(
+            #     f'Leader `{self.state.replica_id}` Slot `{slot}` invalid leading phase `{self[slot].phase.name}` (REQUIRED: `{required_state}`)')
             return True
 
     def _start_leadership(self, slot: Slot, state: LeaderStatePhase, client_peer: Optional[int] = None):
@@ -139,10 +139,13 @@ class Leader(Behaviour, LeaderInterface):
         self[slot].set_state(state)
 
     def _stop_leadership(self, slot: Slot):
-        del self[slot]
+        if slot in self:
+            del self[slot]
 
     def client_request(self, client_peer: int, command: AbstractCommand):
         # Slot does not access other slots at all (apart from it's dependency checks)
+
+        # TODO: how not to assign a new Slot to a command that our quorum may already know about (?); but not us?
 
         slot = Slot(self.state.replica_id, self.next_instance_id)
         self.next_instance_id += 1
@@ -178,7 +181,7 @@ class Leader(Behaviour, LeaderInterface):
 
             inst = copy(self.store[slot])
 
-            assert isinstance(inst, PreAcceptedState), repr(inst)
+            # assert isinstance(inst, PreAcceptedState), repr(inst)
 
             inst.seq = seq
             inst.deps = deps
@@ -238,7 +241,6 @@ class Leader(Behaviour, LeaderInterface):
 
     def finalise_explicit_prepare(self, slot: Slot, replies: List[ExplicitPrepareReply]):
         max_state = max((x.state for x in replies), default=StateType.Prepared)
-        max_ballot = max((x.ballot for x in replies))
 
         own_inst = self.store[slot]
 
@@ -310,7 +312,7 @@ class Leader(Behaviour, LeaderInterface):
             phase = self[slot].phase  # type: AcceptLeaderPhase
             phase.replies.append(AcceptReply(peer))
 
-            if len(phase.replies) >= self.quorum_f:
+            if len(phase.replies) >= self.quorum_slow:
                 self.begin_commit(slot)
 
     def accept_response_nack(self, peer: int, slot: Slot):

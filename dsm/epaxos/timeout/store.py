@@ -41,8 +41,8 @@ class TimeoutStore:
         else:
             r = None
 
-        logger.info(
-            f'TimeoutStore `{self.state.replica_id}` InHeap={len(self.timeouts)}, MinWait={r}')
+        # logger.info(
+        #     f'TimeoutStore `{self.state.replica_id}` InHeap={len(self.timeouts)}, MinWait={r}')
 
         return r
 

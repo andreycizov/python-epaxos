@@ -16,7 +16,10 @@ class DefaultDepsStore(AbstractDepsStore):
         self.last_ident_slot = {}  # type: Dict[int, DefaultDepsStoreState]
 
     def _key(self, command: AbstractCommand):
-        return command.ident // 1000
+        # TODO: we would like to keep track of commands that have been seen, but not executed yet; then arrange their dependencies accordingly.
+
+        # TODO: here, if the command gets into a second PreAccept phase (After ExplicitPrepare) -> it will then obtain an incorrect dependency on a future slot.
+        return command.ident // 600000
 
     def update(self, slot: Slot, old_inst: InstanceState, new_inst: InstanceState):
         if isinstance(new_inst, PostPreparedState):
