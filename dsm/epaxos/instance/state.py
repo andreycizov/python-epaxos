@@ -43,6 +43,9 @@ class InstanceState:
         self.slot = slot
         self.ballot = ballot
 
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.slot}, {self.ballot})'
+
 
 class PreparedState(InstanceState):
     type = StateType.Prepared

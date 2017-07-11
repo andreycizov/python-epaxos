@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from copy import copy
 
@@ -26,7 +26,7 @@ class InstanceStore:
     def __setitem__(self, slot: Slot, new_inst: InstanceState):
         inst = self[slot]
 
-        assert new_inst.type >= inst.type and new_inst.ballot >= inst.ballot
+        assert new_inst.type >= inst.type and new_inst.ballot >= inst.ballot, repr((new_inst, inst))
 
         self.instances[slot] = new_inst
 
@@ -35,12 +35,18 @@ class InstanceStore:
 
     def __getitem__(self, slot: Slot) -> InstanceState:
         if slot not in self:
-            self[slot] = PreparedState(slot, slot.ballot_initial(self.state.epoch))
-        return self[slot]
+            self.instances[slot] = PreparedState(slot, slot.ballot_initial(self.state.epoch))
+        return self.instances[slot]
 
-    def increase_ballot(self, slot: Slot):
+    def increase_ballot(self, slot: Slot, ballot: Optional[Ballot] = None):
         inst = copy(self[slot])
-        inst.ballot = Ballot(self.state.epoch, inst.ballot.b + 1, self.state.replica_id)
+
+        if ballot is None:
+            ballot = Ballot(self.state.epoch, inst.ballot.b + 1, self.state.replica_id)
+
+        assert inst.ballot < ballot
+
+        inst.ballot = ballot
 
         self[slot] = inst
 

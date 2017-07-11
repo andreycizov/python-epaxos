@@ -3,7 +3,7 @@ from typing import List
 import logging
 
 from dsm.epaxos.command.state import AbstractCommand
-from dsm.epaxos.instance.state import Slot, Ballot
+from dsm.epaxos.instance.state import Slot, Ballot, StateType, CommittedState
 from dsm.epaxos.instance.store import InstanceStore
 from dsm.epaxos.network.peer import AcceptorInterface
 from dsm.epaxos.replica.abstract import Behaviour
@@ -20,10 +20,10 @@ class Acceptor(Behaviour, AcceptorInterface):
     ):
         super().__init__(state, store)
 
-    def _check_if_known(self, slot: Slot, ballot: Ballot):
+    def _check_if_known(self, slot: Slot, ballot: Ballot, disallow_empty=False):
         inst = self.store[slot]
 
-        if inst.ballot > ballot:
+        if inst.ballot > ballot or (disallow_empty and inst.type == StateType.Prepared):
             return None
         else:
             return inst
@@ -48,7 +48,10 @@ class Acceptor(Behaviour, AcceptorInterface):
         if inst is None:
             self.state.channel.accept_response_nack(peer, slot)
         else:
-            inst = self.store.accept(slot, ballot, command, seq, deps)
+            if isinstance(inst, CommittedState):
+                self.store.increase_ballot(slot, ballot)
+            else:
+                inst = self.store.accept(slot, ballot, command, seq, deps)
             self.state.channel.accept_response_ack(peer, slot, inst.ballot)
 
     def commit_request(self, peer: int, slot: Slot, ballot: Ballot, seq: int, command: AbstractCommand,
@@ -62,9 +65,9 @@ class Acceptor(Behaviour, AcceptorInterface):
             self.store.commit(slot, ballot, command, seq, deps)
 
     def prepare_request(self, peer: int, slot: Slot, ballot: Ballot):
-        inst = self._check_if_known(slot, ballot)
+        inst = self._check_if_known(slot, ballot, True)
 
         if inst is None:
             self.state.channel.prepare_response_nack(peer, slot)
         else:
-            self.state.channel.pre_accept_response_ack(peer, slot, inst.ballot, inst.seq, inst.deps)
+            self.state.channel.prepare_response_ack(peer, slot, inst.ballot, inst.command, inst.seq, inst.deps, inst.type)

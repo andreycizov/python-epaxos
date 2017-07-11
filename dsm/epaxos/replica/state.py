@@ -13,7 +13,7 @@ class ReplicaState:
         quorum_fast: Set[int],
         quorum_full: Set[int],
         live: bool = True,
-        timeout: timedelta = timedelta(5)
+        timeout: timedelta = timedelta(seconds=5)
     ):
         self.channel = channel
         self.epoch = epoch

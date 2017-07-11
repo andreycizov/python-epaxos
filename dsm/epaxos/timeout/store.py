@@ -2,8 +2,12 @@ import heapq
 from datetime import datetime, timedelta
 from typing import NamedTuple, List, Dict, Optional
 
+import logging
+
 from dsm.epaxos.instance.state import Slot, InstanceState, StateType, Ballot
 from dsm.epaxos.replica.state import ReplicaState
+
+logger = logging.getLogger(__name__)
 
 
 class TimeoutStoreState(NamedTuple):
@@ -31,11 +35,16 @@ class TimeoutStore:
 
         self.last_states[slot] = last_state
 
-    def minimum_wait(self) -> Optional[timedelta]:
+    def minimum_wait(self) -> Optional[float]:
         if len(self.timeouts):
-            return max(self.timeouts[0].time - self.now(), timedelta(0))
+            r = max((self.timeouts[0].time - self.now()).total_seconds(), 0.)
         else:
-            return None
+            r = None
+
+        logger.info(
+            f'TimeoutStore `{self.state.replica_id}` InHeap={len(self.timeouts)}, MinWait={r}')
+
+        return r
 
     def query(self) -> List[Slot]:
         now = self.now()
