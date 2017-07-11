@@ -140,6 +140,7 @@ def route_packet(replica: Replica, packet: Packet):
     else:
         if random.random() > 0.95:
             return
+
         if isinstance(p, PreAcceptRequest):
             replica.pre_accept_request(packet.origin, p.slot, p.ballot, p.command, p.seq, p.deps)
         elif isinstance(p, PreAcceptResponseAck):

@@ -10,6 +10,7 @@ from zmq import Context
 
 from dsm.epaxos.command.deps.default import DefaultDepsStore
 from dsm.epaxos.command.state import AbstractCommand
+from dsm.epaxos.instance.state import StateType
 from dsm.epaxos.instance.store import InstanceStore
 from dsm.epaxos.network.zeromq.mapping import ReplicaChannel, route_packet, deserialize
 from dsm.epaxos.network.zeromq.util import cli_logger
@@ -44,7 +45,8 @@ class ReplicaServer:
         self.replica_socket = replica_socket
 
         channel = ReplicaChannel(replica_id, self.replica_socket)
-        state = ReplicaState(channel, epoch, replica_id, set(peer_addr.keys()), set(peer_addr.keys()), True, timedelta(milliseconds=150))
+        state = ReplicaState(channel, epoch, replica_id, set(peer_addr.keys()), set(peer_addr.keys()), True,
+                             timedelta(milliseconds=150))
         deps_store = DefaultDepsStore()
         timeout_store = TimeoutStore(state)
         store = InstanceStore(state, deps_store, timeout_store)
@@ -66,7 +68,7 @@ class ReplicaServer:
         time_start = datetime.now()
         while True:
             min_wait = self.replica.minimum_wait()
-            poll_result = self.poller.poll(min_wait * 1000. if min_wait else 1.)
+            poll_result = self.poller.poll(min_wait * 1000. if min_wait else 1000.)
 
             sockets = dict(poll_result)
 
@@ -90,7 +92,12 @@ class ReplicaServer:
             if time_now - time_start > timedelta(minutes=0.5):
                 time_start = datetime.now()
 
-                print(self.replica, {y: len(list(x)) for y, x in groupby(sorted([v.type for k, v in self.replica.store.instances.items()]))}, self.replica.store.last_committed)
+                print(self.state.replica_id,
+                      sorted((y.name, len(list(x))) for y, x in
+                             groupby(sorted([v.type for k, v in self.replica.store.instances.items()]))),
+                      sorted((k, v) for k, v in self.replica.store.executed_cut.items()))
+
+            self.replica.store.execute_all_pending()
 
 
 class ReplicaClient:
@@ -174,8 +181,6 @@ def replica_client(peer_id: int, replicas: Dict[int, ReplicaAddress]):
         time.sleep(0.5)
 
         latencies = []
-
-
 
         for i in range(20000):
             lat, _ = rc.request(AbstractCommand(random.randint(1, 1000000)))

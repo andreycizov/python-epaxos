@@ -104,10 +104,12 @@ class Leader(Behaviour, LeaderInterface):
 
     @property
     def peers_fast(self):
+        # TODO: we may order the peers here based on their latencies.
         return {x for x in self.state.quorum_fast if x != self.state.replica_id}
 
     @property
     def peers_full(self):
+        # TODO: we may order the peers here based on their latencies
         return {x for x in self.state.quorum_full if x != self.state.replica_id}
 
     @property

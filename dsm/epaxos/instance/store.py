@@ -1,6 +1,13 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set, Tuple, Deque
 
 from copy import copy
+
+from collections import defaultdict, deque
+
+from functools import reduce
+
+import logging
+from tarjan import tarjan
 
 from dsm.epaxos.command.deps.store import AbstractDepsStore
 from dsm.epaxos.command.state import AbstractCommand, Noop
@@ -8,6 +15,8 @@ from dsm.epaxos.instance.state import Slot, Ballot, StateType, PreparedState, Po
     PreAcceptedState, AcceptedState, CommittedState, InstanceState
 from dsm.epaxos.replica.state import ReplicaState
 from dsm.epaxos.timeout.store import TimeoutStore
+
+logger = logging.getLogger(__name__)
 
 
 class InstanceStore:
@@ -18,9 +27,14 @@ class InstanceStore:
 
         self.instances = {}  # type: Dict[Slot, InstanceState]
 
-        self.last_committed = {}  # type: Dict[int, Slot]
+        self.executed_cut = {}  # type: Dict[int, Slot]
 
-        # TODO: list all of the instances that are pending execution.
+        self.executed = {}  # type: Dict[Slot, bool]
+
+        self.execute_pending = deque()  # type: Deque[Slot]
+        self.execute_log = deque()  # type: Deque[List[Slot]]
+
+        self.commit_expected = defaultdict(set)  # type: Dict[Slot, Set[Slot]]
 
     def __contains__(self, item: Slot):
         return item in self.instances
@@ -34,23 +48,6 @@ class InstanceStore:
 
         self.deps_store.update(slot, inst, new_inst)
         self.timeout_store.update(slot, inst, new_inst)
-
-        if new_inst.type == StateType.Committed:
-            # TODO: try to execute the command here. Command execution will imply ordering and will allow us to
-            # TODO: truncate the commands.
-
-            # TODO: we may execute this algorithm only IFF Comamnd is executed (this way the ordering will always imply
-            # TODO: proper ordering -> or will it not?
-
-            if slot.replica_id not in self.last_committed:
-                self.last_committed[slot.replica_id] = Slot(slot.replica_id, -1)
-
-            last_committed_slot = self.last_committed[slot.replica_id]
-
-            next_committed_slot = Slot(last_committed_slot.replica_id, last_committed_slot.instance_id + 1)
-
-            if slot == next_committed_slot:
-                self.last_committed[slot.replica_id] = slot
 
     def __getitem__(self, slot: Slot) -> InstanceState:
         if slot not in self:
@@ -75,7 +72,7 @@ class InstanceStore:
 
     def pre_accept(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int = 0, deps: List[Slot] = list()):
         assert StateType.PreAccepted >= self[slot].type and ballot >= self[slot].ballot, (
-        (slot, ballot, command, seq, deps), self[slot])
+            (slot, ballot, command, seq, deps), self[slot])
 
         local_deps = self.deps_store.query(slot, command)
 
@@ -92,7 +89,7 @@ class InstanceStore:
 
     def _post_pre_accept(self, cls, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int, deps: List[Slot]):
         assert cls.type >= self[slot].type and ballot >= self[slot].ballot, (
-        (slot, ballot, command, seq, deps), self[slot])
+            (slot, ballot, command, seq, deps), self[slot])
 
         new_inst = cls(slot, ballot, command, seq, deps)
 
@@ -103,6 +100,97 @@ class InstanceStore:
     def accept(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int, deps: List[Slot]) -> AcceptedState:
         return self._post_pre_accept(AcceptedState, slot, ballot, command, seq, deps)
 
+    def _build_deps_graph(self, slot: Slot) -> Dict[Slot, Optional[List[Slot]]]:
+        inst = self[slot]
+
+        assert isinstance(inst, PostPreparedState), f'Can not build a dependency graph for Slot={slot} `{self[slot]}`'
+
+        dep_graph = {}  # type: Dict[Slot, List[Slot]]
+
+        pending_slots = deque()  # type: Deque[Slot]
+        pending_slots.append(slot)
+
+        while len(pending_slots):
+            current_slot = pending_slots.popleft()
+
+            dep_graph[current_slot] = []
+            inst = self[current_slot]
+
+            if isinstance(inst, PostPreparedState):
+                for dep_slot in inst.deps:
+                    if dep_slot not in dep_graph and dep_slot not in pending_slots and not self.is_executed(dep_slot):
+                        pending_slots.append(dep_slot)
+                    if not self.is_executed(dep_slot):
+                        dep_graph[current_slot].append(dep_slot)
+
+        return dep_graph
+
+    def _build_exec_order(self, graph: Dict[Slot, List[Slot]]):
+        exec_order = tarjan(graph)
+
+        return reduce(lambda a, b: a + b, [sorted(x, key=lambda x: self[x].seq) for x in exec_order], [])
+
     def commit(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int,
                deps: List[Slot]) -> CommittedState:
+        self.check_waited_for(slot)
+        self.execute_pending.append(slot)
+
         return self._post_pre_accept(CommittedState, slot, ballot, command, seq, deps)
+
+    def check_waited_for(self, slot: Slot):
+        if slot in self.commit_expected:
+            self.execute_pending.extend(self.commit_expected[slot])
+            del self.commit_expected[slot]
+
+    def is_executed(self, slot: Slot):
+        if slot not in self.executed:
+            return False
+        else:
+            return self.executed[slot]
+
+    def set_executed(self, slot: Slot):
+        self.executed[slot] = True
+
+        self.update_executed_cut(slot.replica_id)
+
+    def update_executed_cut(self, replica_id):
+        # Whack-a-mole for executed flags.
+        current_slot = self.executed_cut.get(replica_id, Slot(replica_id, -1))
+        current_slot = Slot(replica_id, current_slot.instance_id + 1)
+
+        while self.is_executed(current_slot):
+            self.executed_cut[replica_id] = current_slot
+
+            current_slot = self.executed_cut[replica_id]
+            current_slot = Slot(replica_id, current_slot.instance_id + 1)
+
+    def execute(self, slot: Slot):
+        if self.is_executed(slot):
+            return
+
+        assert self[slot].type == StateType.Committed
+
+        graph = self._build_deps_graph(slot)
+
+        slots_to_wait = [x for x in graph.keys() if self[x].type < StateType.Committed]
+
+        if len(slots_to_wait):
+            for slot_to_wait in slots_to_wait:
+                self.commit_expected[slot_to_wait].update({slot})
+            return
+
+        order = self._build_exec_order(graph)
+
+        self.execute_log.append(order)
+
+        for x in order:
+            self.set_executed(x)
+
+        return order
+
+    def execute_all_pending(self):
+        while len(self.execute_pending):
+            cmds = self.execute(self.execute_pending.popleft())
+
+            # if cmds:
+            #     logger.info(f'Executed {cmds}')
