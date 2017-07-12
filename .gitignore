@@ -1,3 +1,5 @@
+*.profile
+
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm
 
 ## Directory-based project format
@@ -11,7 +13,17 @@
 # .idea/sqlDataSources.xml
 # .idea/dynamic.xml
 
-test/
+ast_task/
+ast_task/dsl/
+ast_task/sys
+astsql/parser/
+astsql/query/
+astsql/scripting/
+astsql/bpm_use_case.py
+astsql/generic.py
+state_machine/
+state_machine_tests/
+cldcpu/*
 
 .DS_Store
 
