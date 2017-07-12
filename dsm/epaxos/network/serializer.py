@@ -1,71 +1,71 @@
 import json
 import typing
 from enum import Enum
+from functools import lru_cache
 from typing import NamedTuple
 
 
-def _serialize_type(t, val):
-    if isinstance(val, Enum):
-        return val.name
-    elif isinstance(val, int):
-        return val
-    elif isinstance(val, str):
-        return val
+@lru_cache(maxsize=128)
+def _generate_type_serializer(t):
+    if issubclass(t, Enum):
+        return lambda val: val.name
+    elif issubclass(t, int):
+        return lambda val: val
+    elif issubclass(t, str):
+        return lambda val: val
     elif issubclass(t, typing.List):
         assert hasattr(t, '__args__')
-        return [_serialize_type(t.__args__[0], x) for x in val]
-    elif hasattr(val, '_fields') and hasattr(val, '_field_types'):
-        return _serialize_namedtuple(val)
+        serializer = _generate_type_serializer(t.__args__[0])
+        return lambda val: [serializer(x) for x in val]
+    elif hasattr(t, 'serialize'):
+        return t.serialize
+    elif hasattr(t, '_fields') and hasattr(t, '_field_types'):
+        fields = [f for f, _ in t._field_types.items()]
+        serializers = {f: _generate_type_serializer(t) for f, t in t._field_types.items()}
+        return lambda val: {
+            f: serializers[f](getattr(val, f)) for f in fields
+        }
     else:
-        return val.__class__.serialize(val)
+        raise NotImplementedError('')
 
 
-def _serialize_namedtuple(tpl: NamedTuple):
-    if hasattr(tpl.__class__, 'serialize'):
-        return tpl.__class__.serialize(tpl)
-    else:
-        r = {}
-        for f, t in tpl._field_types.items():
-            val = getattr(tpl, f)
-
-            r[f] = _serialize_type(t, val)
-        return r
-
-
-def serialize_namedtuple(tpl: NamedTuple):
-    return json.dumps(_serialize_namedtuple(tpl)).encode()
-
-
-def _deserialize_type(t, val):
+@lru_cache(maxsize=128)
+def _generate_type_deserializer(t):
     if t == int:
-        return val
+        return lambda val: val
     elif t == str:
-        return val
+        return lambda val: val
     elif issubclass(t, typing.List):
         assert hasattr(t, '__args__')
-        return [_deserialize_type(t.__args__[0], x) for x in val]
+        deserializer = _generate_type_deserializer(t.__args__[0])
+        return lambda val: [deserializer(x) for x in val]
     elif issubclass(t, Enum):
-        return t[val]
-    elif hasattr(t, '_field_types'):
-        return _deserialize_namedtuple(t, val)
+        return lambda val: t[val]
     elif hasattr(t, 'deserialize'):
-        return t.deserialize(val)
+        return t.deserialize
+    elif hasattr(t, '_field_types'):
+        fields = [f for f, _ in t._field_types.items()]
+        deserializers = {f: _generate_type_deserializer(t) for f, t in t._field_types.items()}
+        return lambda val: t(**{
+            f: deserializers[f](val[f]) for f in fields
+        })
     else:
         raise NotImplementedError(f'{t}, {val}')
 
 
-def _deserialize_namedtuple(tpl_cls, json):
-    if hasattr(tpl_cls, 'deserialize'):
-        return tpl_cls.deserialize(json)
-    else:
-        kwargs = {}
-
-        for f, t in tpl_cls._field_types.items():
-            val = json[f]
-            kwargs[f] = _deserialize_type(t, val)
-
-        return tpl_cls(**kwargs)
+def _serialize(val):
+    serializer = _generate_type_serializer(val.__class__)
+    return serializer(val)
 
 
-def deserialize_namedtuple(tpl_cls, body):
-    return _deserialize_namedtuple(tpl_cls, json.loads(body.decode()))
+def _deserialize(t, json):
+    deserializer = _generate_type_deserializer(t)
+    return deserializer(json)
+
+
+def serialize_json(val):
+    return json.dumps(_serialize(val)).encode()
+
+
+def deserialize_json(t, body):
+    return _deserialize(t, json.loads(body.decode()))

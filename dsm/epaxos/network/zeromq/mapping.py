@@ -3,21 +3,21 @@ import zmq
 
 from dsm.epaxos.network.mapper import ReplicaSendChannel, ReplicaReceiveChannel
 from dsm.epaxos.network.packet import Packet
-from dsm.epaxos.network.serializer import deserialize_namedtuple, serialize_namedtuple
+from dsm.epaxos.network.serializer import serialize_json, deserialize_json
 from dsm.epaxos.network.zeromq import impl
 
 logger = logging.getLogger(__name__)
 
 
 def serialize(packet: Packet):
-    repr = serialize_namedtuple(packet)
+    repr = serialize_json(packet)
     # repr = zlib.compress(repr)
     return repr
 
 
 def deserialize(body: bytes):
     # body = zlib.decompress(body)
-    return deserialize_namedtuple(Packet, body)
+    return deserialize_json(Packet, body)
 
 
 class ZMQReplicaReceiveChannel(ReplicaReceiveChannel):
