@@ -2,7 +2,7 @@ import cProfile
 import logging
 import random
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from itertools import groupby
 from typing import Dict, NamedTuple
 
@@ -94,7 +94,7 @@ class ReplicaServer:
             if poll_delta > self.state.seconds_per_tick:
                 self.replica.tick()
                 self.replica.check_timeouts()
-                last_tick_time = datetime.now()
+                last_tick_time = last_tick_time + timedelta(seconds=self.state.seconds_per_tick)
 
             sockets = dict(poll_result)
 
