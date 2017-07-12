@@ -1,3 +1,5 @@
+import os
+import signal
 from multiprocessing import Process
 from typing import List
 
@@ -38,7 +40,11 @@ def main():
     for res in ress:
         res.start()
     try:
-        pass
+        for res in ress:
+            res.join()
+    except:
+        for res in ress:
+            os.kill(res.pid, signal.SIGTERM)
     finally:
         for res in ress:
             res.join()

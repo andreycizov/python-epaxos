@@ -172,16 +172,18 @@ class Leader(Behaviour, LeaderInterface):
             self.state.channel.pre_accept_request(peer, slot, inst.ballot, inst.command, inst.seq, inst.deps)
 
     def finalise_pre_accept(self, slot: Slot, replies: List[PreAcceptReply]):
+        inst = self.store[slot]
+
         if self[slot].allow_fast and (
-                reduce(lambda a, b: a == b, (x.deps for x in replies), self.store[slot].deps) and
-                reduce(lambda a, b: a == b, (x.seq for x in replies), self.store[slot].seq)
+                all(x.deps == inst.deps for x in replies) and
+                all(x.seq == inst.seq for x in replies)
         ):
             self.begin_commit(slot)
         else:
             seq = max({x.seq for x in replies})
-            deps = sorted(reduce(lambda a, b: a + b, (x.deps for x in replies), list()))
+            deps = sorted(set(reduce(lambda a, b: a + b, (x.deps for x in replies), list())))
 
-            inst = copy(self.store[slot])
+            inst = copy(inst)
 
             # assert isinstance(inst, PreAcceptedState), repr(inst)
 

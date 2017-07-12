@@ -1,6 +1,7 @@
 import cProfile
 import logging
 import random
+import signal
 import time
 from datetime import datetime, timedelta
 from itertools import groupby
@@ -39,8 +40,13 @@ class ReplicaServer:
 
         socket = context.socket(zmq.ROUTER)
         socket.bind(peer_addr[replica_id].replica_addr)
-        socket.setsockopt_string(zmq.IDENTITY, str(replica_id))
+        socket.setsockopt(zmq.IDENTITY, str(replica_id).encode())
         socket.setsockopt(zmq.ROUTER_HANDOVER, 1)
+        socket.setsockopt(zmq.RCVBUF, 2 ** 20)
+        socket.setsockopt(zmq.SNDBUF, 2 ** 20)
+        socket.setsockopt(zmq.LINGER, 0)
+        socket.hwm = 50
+        # socket.setsockopt(zmq.HWM, 20)
 
         self.poller.register(socket, zmq.POLLIN)
         self.socket = socket
@@ -79,6 +85,9 @@ class ReplicaServer:
         poll_delta = 0.
         last_tick = self.state.ticks
 
+        pkts_rcvd = 0
+        pkts_sent = 0
+
         while True:
             min_wait = self.replica.check_timeouts_minimum_wait()
             min_wait_poll = max(0, self.state.seconds_per_tick - poll_delta)
@@ -96,24 +105,29 @@ class ReplicaServer:
                 self.replica.check_timeouts()
                 last_tick_time = last_tick_time + timedelta(seconds=self.state.seconds_per_tick)
 
+            pkts_sent += self.channel_send.send_packets()
+
             sockets = dict(poll_result)
 
             if self.socket in sockets:
-                packets = []
+                rcvd = 0
                 while True:
                     try:
                         replica_request = self.socket.recv_multipart(flags=zmq.NOBLOCK)[-1]
 
-                        packets.append(replica_request)
+                        self.channel_receive.receive_packet(replica_request)
+                        rcvd += 1
                     except zmq.ZMQError:
                         break
-                for packet in packets:
-                    self.channel_receive.receive_packet(packet)
 
-                if len(packets):
+                pkts_rcvd += rcvd
+
+                if rcvd:
                     self.replica.execute_pending()
             else:
                 pass
+
+            pkts_sent += self.channel_send.send_packets()
 
             if self.state.ticks != last_tick and self.state.ticks % (self.state.jiffies * 30) == 0:
                 last_tick = self.state.ticks
@@ -124,7 +138,9 @@ class ReplicaServer:
                     self.state.replica_id,
                     sorted((y.name, len(list(x))) for y, x in
                            groupby(sorted([v.type for k, v in self.replica.store.instances.items()]))),
-                    sorted((k, v) for k, v in self.replica.store.executed_cut.items())
+                    # sorted((k, v) for k, v in self.replica.store.executed_cut.items())
+                    pkts_sent,
+                    pkts_rcvd
                 )
 
 
@@ -142,7 +158,7 @@ class ReplicaClient:
         self.poller = zmq.Poller()
 
         socket = context.socket(zmq.DEALER)
-        socket.setsockopt_string(zmq.IDENTITY, str(peer_id))
+        socket.setsockopt(zmq.IDENTITY, str(peer_id).encode())
 
         self.socket = socket
         self.poller.register(self.socket, zmq.POLLIN)
@@ -192,9 +208,20 @@ def replica_server(epoch: int, replica_id: int, replicas: Dict[int, ReplicaAddre
     if profile:
         pr = cProfile.Profile()
         pr.enable()
+
     # print('Calibrating profiler')
     # for i in range(5):
     #     print(pr.calibrate(10000))
+    def receive_signal(*args):
+        import sys
+        logger.info('Writing results')
+        if profile:
+            pr.disable()
+            pr.dump_stats(f'{replica_id}.profile')
+        sys.exit()
+
+    signal.signal(signal.SIGTERM, receive_signal)
+
     try:
         cli_logger()
         context = zmq.Context(len(replicas), shadow=False)
@@ -225,6 +252,8 @@ def replica_client(peer_id: int, replicas: Dict[int, ReplicaAddress]):
         for i in range(20000):
             lat, _ = rc.request(AbstractCommand(random.randint(1, 1000000)))
             # latencies.append(lat)
+            # time.sleep(1.)
+            # print(lat)
             if i % 200 == 0:
                 # print(latencies)
                 logger.info(f'Client `{peer_id}` DONE {i + 1}')

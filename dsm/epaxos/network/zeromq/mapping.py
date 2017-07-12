@@ -1,4 +1,6 @@
 import logging
+from collections import deque
+
 import zmq
 
 from dsm.epaxos.network.mapper import ReplicaSendChannel, ReplicaReceiveChannel
@@ -29,21 +31,45 @@ class ZMQReplicaReceiveChannel(ReplicaReceiveChannel):
         return self.server.replica
 
     def receive_packet(self, body):
-        self.receive(deserialize(body))
+        packet = deserialize(body)
+        # print('RCVD', packet.origin, packet.destination, packet.payload)
+        self.receive(packet)
 
 
 class ZMQReplicaSendChannel(ReplicaSendChannel):
     def __init__(self, server: 'impl.ReplicaServer'):
         self.server = server
+        self.queue = deque()
 
     @property
     def peer_id(self):
         return self.server.state.replica_id
 
+    def send_packets(self):
+        i = 0
+        try:
+            while True:
+                item = self.queue.popleft()
+
+                x, y = item
+
+                # print(x, y)
+
+                self.server.socket.send_multipart(item, zmq.NOBLOCK, copy=False, track=False)
+
+                # self.server.socket.send(x, zmq.SNDMORE | zmq.NOBLOCK, copy=False, track=False)
+                # self.server.socket.send(y, zmq.NOBLOCK, copy=False, track=False)
+                i += 1
+        except IndexError:
+            pass
+        return i
+
     def send_packet(self, packet: Packet):
+        # print('SEND', packet.origin, packet.destination, packet.payload)
+
         bts = serialize(packet)
 
-        self.server.socket.send_multipart([str(packet.destination).encode(), bts], flags=zmq.NOBLOCK, copy=False)
+        self.queue.append([str(packet.destination).encode(), bts])
 
 
 class ZMQClientSendChannel(ReplicaSendChannel):
