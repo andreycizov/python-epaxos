@@ -1,7 +1,8 @@
+import cProfile
 import logging
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from itertools import groupby
 from typing import Dict, NamedTuple
 
@@ -10,9 +11,9 @@ from zmq import Context
 
 from dsm.epaxos.command.deps.default import DefaultDepsStore
 from dsm.epaxos.command.state import AbstractCommand
-from dsm.epaxos.instance.state import StateType
 from dsm.epaxos.instance.store import InstanceStore
-from dsm.epaxos.network.zeromq.mapping import ReplicaChannel, route_packet, deserialize
+from dsm.epaxos.network.zeromq.mapping import deserialize, ZMQReplicaReceiveChannel, ZMQReplicaSendChannel, \
+    ZMQClientSendChannel
 from dsm.epaxos.network.zeromq.util import cli_logger
 from dsm.epaxos.replica.replica import Replica
 from dsm.epaxos.replica.state import ReplicaState
@@ -36,17 +37,26 @@ class ReplicaServer:
         self.poller = zmq.Poller()
         self.peer_addr = peer_addr
 
-        replica_socket = context.socket(zmq.ROUTER)
-        replica_socket.bind(peer_addr[replica_id].replica_addr)
-        replica_socket.setsockopt_string(zmq.IDENTITY, str(replica_id))
-        replica_socket.setsockopt(zmq.ROUTER_HANDOVER, 1)
+        socket = context.socket(zmq.ROUTER)
+        socket.bind(peer_addr[replica_id].replica_addr)
+        socket.setsockopt_string(zmq.IDENTITY, str(replica_id))
+        socket.setsockopt(zmq.ROUTER_HANDOVER, 1)
 
-        self.poller.register(replica_socket, zmq.POLLIN)
-        self.replica_socket = replica_socket
+        self.poller.register(socket, zmq.POLLIN)
+        self.socket = socket
 
-        channel = ReplicaChannel(replica_id, self.replica_socket)
-        state = ReplicaState(channel, epoch, replica_id, set(peer_addr.keys()), set(peer_addr.keys()), True,
-                             timedelta(milliseconds=150))
+        self.channel_receive = ZMQReplicaReceiveChannel(self)
+        self.channel_send = ZMQReplicaSendChannel(self)
+
+        state = ReplicaState(
+            self.channel_send,
+            epoch, replica_id,
+            set(peer_addr.keys()),
+            set(peer_addr.keys()),
+            True,
+            5
+        )
+
         deps_store = DefaultDepsStore()
         timeout_store = TimeoutStore(state)
         store = InstanceStore(state, deps_store, timeout_store)
@@ -60,44 +70,62 @@ class ReplicaServer:
             if peer_id == self.state.replica_id:
                 continue
 
-            self.replica_socket.connect(addr.replica_addr)
+            self.socket.connect(addr.replica_addr)
 
     def main(self):
         logger.info(f'Replica `{self.state.replica_id}` started.')
 
-        time_start = datetime.now()
+        last_tick_time = datetime.now()
+        poll_delta = 0.
+        last_tick = self.state.ticks
+
         while True:
-            min_wait = self.replica.minimum_wait()
-            poll_result = self.poller.poll(min_wait * 1000. if min_wait else 1000.)
+            min_wait = self.replica.check_timeouts_minimum_wait()
+            min_wait_poll = max(0, self.state.seconds_per_tick - poll_delta)
+
+            if min_wait:
+                min_wait = min(min_wait, min_wait_poll)
+            else:
+                min_wait = min_wait_poll
+
+            poll_result = self.poller.poll(min_wait * 1000.)
+            poll_delta = (datetime.now() - last_tick_time).total_seconds()
+
+            if poll_delta > self.state.seconds_per_tick:
+                self.replica.tick()
+                self.replica.check_timeouts()
+                last_tick_time = datetime.now()
 
             sockets = dict(poll_result)
 
-            replica_recv = self.replica_socket in sockets
-
-            if replica_recv:
+            if self.socket in sockets:
+                packets = []
                 while True:
                     try:
-                        replica_request = self.replica_socket.recv_multipart(flags=zmq.NOBLOCK)[-1]
+                        replica_request = self.socket.recv_multipart(flags=zmq.NOBLOCK)[-1]
 
-                        packet = deserialize(replica_request)
-
-                        route_packet(self.replica, packet)
+                        packets.append(replica_request)
                     except zmq.ZMQError:
                         break
+                for packet in packets:
+                    self.channel_receive.receive_packet(packet)
 
-            self.replica.check_timeouts()
+                if len(packets):
+                    self.replica.execute_pending()
+            else:
+                pass
 
-            time_now = datetime.now()
-
-            if time_now - time_start > timedelta(minutes=0.5):
-                time_start = datetime.now()
-
-                print(self.state.replica_id,
-                      sorted((y.name, len(list(x))) for y, x in
-                             groupby(sorted([v.type for k, v in self.replica.store.instances.items()]))),
-                      sorted((k, v) for k, v in self.replica.store.executed_cut.items()))
-
-            self.replica.store.execute_all_pending()
+            if self.state.ticks != last_tick and self.state.ticks % (self.state.jiffies * 30) == 0:
+                last_tick = self.state.ticks
+                print(
+                    datetime.now(),
+                    self.state.ticks,
+                    self.state.seconds_per_tick,
+                    self.state.replica_id,
+                    sorted((y.name, len(list(x))) for y, x in
+                           groupby(sorted([v.type for k, v in self.replica.store.instances.items()]))),
+                    sorted((k, v) for k, v in self.replica.store.executed_cut.items())
+                )
 
 
 class ReplicaClient:
@@ -129,7 +157,7 @@ class ReplicaClient:
             self.socket.disconnect(self.peer_addr[self.replica_id].replica_addr)
 
         self.replica_id = replica_id
-        self.channel = ReplicaChannel(self.peer_id, self.socket)
+        self.channel = ZMQClientSendChannel(self)
 
         self.socket.connect(self.peer_addr[replica_id].replica_addr)
 
@@ -143,7 +171,6 @@ class ReplicaClient:
         start = datetime.now()
 
         while True:
-
             poll_result = dict(self.poller.poll(TIMEOUT))
 
             if self.socket in poll_result:
@@ -161,14 +188,27 @@ class ReplicaClient:
 
 
 def replica_server(epoch: int, replica_id: int, replicas: Dict[int, ReplicaAddress]):
+    profile = True
+    if profile:
+        pr = cProfile.Profile()
+        pr.enable()
+    # print('Calibrating profiler')
+    # for i in range(5):
+    #     print(pr.calibrate(10000))
     try:
         cli_logger()
         context = zmq.Context.instance()
         rs = ReplicaServer(context, epoch, replica_id, replicas)
         rs.connect()
+
         rs.main()
+
     except:
         logger.exception(f'Server {replica_id}')
+    finally:
+        if profile:
+            pr.disable()
+            pr.dump_stats(f'{replica_id}.profile')
 
 
 def replica_client(peer_id: int, replicas: Dict[int, ReplicaAddress]):
@@ -184,7 +224,7 @@ def replica_client(peer_id: int, replicas: Dict[int, ReplicaAddress]):
 
         for i in range(20000):
             lat, _ = rc.request(AbstractCommand(random.randint(1, 1000000)))
-            latencies.append(lat)
+            # latencies.append(lat)
             if i % 200 == 0:
                 # print(latencies)
                 logger.info(f'Client `{peer_id}` DONE {i + 1}')

@@ -11,6 +11,14 @@ class AbstractCommand:
     def __lt__(self, other):
         return self.tuple() < other.tuple()
 
+    @classmethod
+    def deserialize(cls, json):
+        return cls(json['i'])
+
+    @classmethod
+    def serialize(cls, obj):
+        return {'i': obj.ident}
+
 
 class EmptyCommand(AbstractCommand):
     def __init__(self):

@@ -101,10 +101,6 @@ class InstanceStore:
         return self._post_pre_accept(AcceptedState, slot, ballot, command, seq, deps)
 
     def _build_deps_graph(self, slot: Slot) -> Dict[Slot, Optional[List[Slot]]]:
-        inst = self[slot]
-
-        assert isinstance(inst, PostPreparedState), f'Can not build a dependency graph for Slot={slot} `{self[slot]}`'
-
         dep_graph = {}  # type: Dict[Slot, List[Slot]]
 
         pending_slots = deque()  # type: Deque[Slot]
@@ -132,8 +128,9 @@ class InstanceStore:
 
     def commit(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int,
                deps: List[Slot]) -> CommittedState:
-        self.check_waited_for(slot)
-        self.execute_pending.append(slot)
+        if self[slot].type < StateType.Committed:
+            self.check_waited_for(slot)
+            self.execute_pending.append(slot)
 
         return self._post_pre_accept(CommittedState, slot, ballot, command, seq, deps)
 

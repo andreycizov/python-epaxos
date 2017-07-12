@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class TimeoutStoreState(NamedTuple):
-    time: datetime
+    time: int
     slot: Slot
     ballot: Ballot
     type: StateType
@@ -28,33 +28,24 @@ class TimeoutStore:
         return datetime.now()
 
     def update(self, slot: Slot, old_inst: InstanceState, new_inst: InstanceState):
-        last_state = TimeoutStoreState(self.now() + self.state.timeout, slot, new_inst.ballot, new_inst.type)
+        last_state = TimeoutStoreState(self.state.ticks + self.state.timeout, slot, new_inst.ballot, new_inst.type)
 
         if new_inst.type < StateType.Committed:
-            heapq.heappush(self.timeouts, last_state)
-
-        self.last_states[slot] = last_state
+            self.last_states[slot] = last_state
+        elif slot in self.last_states:
+            del self.last_states[slot]
 
     def minimum_wait(self) -> Optional[float]:
-        if len(self.timeouts):
-            r = max((self.timeouts[0].time - self.now()).total_seconds(), 0.)
+        now = self.state.ticks
+
+        if len(self.last_states.items()):
+            return max(min((now - x.time) * self.state.seconds_per_tick for x in self.last_states.values()), 0)
         else:
-            r = None
-
-        # logger.info(
-        #     f'TimeoutStore `{self.state.replica_id}` InHeap={len(self.timeouts)}, MinWait={r}')
-
-        return r
+            return None
 
     def query(self) -> List[Slot]:
-        now = self.now()
-
         r = []
-        while len(self.timeouts) and self.timeouts[0].time < now:
-            item = heapq.heappop(self.timeouts)  # type: TimeoutStoreState
-
-            inst = self.last_states[item.slot]
-
-            if inst.type == item.type and inst.ballot == item.ballot:
-                r.append(item.slot)
+        for k in [k for k, v in self.last_states.items() if v.time < self.state.ticks]:
+            del self.last_states[k]
+            r.append(k)
         return r

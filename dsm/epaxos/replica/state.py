@@ -13,7 +13,8 @@ class ReplicaState:
         quorum_fast: Set[int],
         quorum_full: Set[int],
         live: bool = True,
-        timeout: timedelta = timedelta(seconds=5)
+        timeout: int = 5,
+        jiffies: int = 33
     ):
         self.channel = channel
         self.epoch = epoch
@@ -22,3 +23,9 @@ class ReplicaState:
         self.quorum_full = quorum_full
         self.live = live
         self.timeout = timeout
+        self.ticks = 0
+        self.jiffies = jiffies
+        self.seconds_per_tick = 1. / self.jiffies
+
+    def tick(self):
+        self.ticks += 1

@@ -15,6 +15,14 @@ class Slot(NamedTuple):
     def __repr__(self):
         return f'{self.__class__.__name__}({self.replica_id},{self.instance_id})'
 
+    @classmethod
+    def serialize(cls, obj: 'Slot'):
+        return [obj.replica_id, obj.instance_id]
+
+    @classmethod
+    def deserialize(cls, json):
+        return cls(*json)
+
 
 class Ballot(NamedTuple):
     epoch: int
@@ -26,6 +34,14 @@ class Ballot(NamedTuple):
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.epoch},{self.b},{self.replica_id})'
+
+    @classmethod
+    def serialize(cls, obj: 'Ballot'):
+        return [obj.epoch, obj.b, obj.replica_id]
+
+    @classmethod
+    def deserialize(cls, json):
+        return cls(*json)
 
 
 class StateType(IntEnum):

@@ -101,5 +101,4 @@ class ClientInterface:
 
 
 class Channel(AcceptorInterface, ClientInterface, LeaderInterface):
-    def __init__(self):
-        pass
+    pass

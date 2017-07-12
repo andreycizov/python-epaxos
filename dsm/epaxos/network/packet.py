@@ -1,7 +1,8 @@
-from typing import NamedTuple, List
+from typing import List, NamedTuple
 
 from dsm.epaxos.command.state import AbstractCommand
-from dsm.epaxos.instance.state import Slot, Ballot, StateType
+from dsm.epaxos.instance.state import Ballot, Slot, StateType
+from dsm.epaxos.network.serializer import _deserialize_namedtuple, _serialize_namedtuple
 
 
 class Payload:
@@ -13,6 +14,19 @@ class Packet(NamedTuple):
     destination: int
     type: str
     payload: Payload
+
+    @classmethod
+    def serialize(cls, obj: 'Packet'):
+        return {
+            'o': obj.origin,
+            'd': obj.destination,
+            't': obj.type,
+            'p': _serialize_namedtuple(obj.payload)
+        }
+
+    @classmethod
+    def deserialize(cls, json):
+        return cls(json['o'], json['d'], json['t'], _deserialize_namedtuple(TYPE_TO_PACKET[json['t']], json['p']))
 
 
 class ClientRequest(NamedTuple, Payload):
@@ -103,3 +117,5 @@ PACKETS = [
     PrepareResponseAck,
     PrepareResponseNack
 ]
+
+TYPE_TO_PACKET = {v.__name__: v for v in PACKETS}

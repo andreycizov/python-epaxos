@@ -4,19 +4,26 @@ from dsm.epaxos.replica.leader import Leader
 from dsm.epaxos.replica.state import ReplicaState
 
 
-class Replica(Leader, Acceptor):
+class Replica:
     def __init__(
         self,
         state: ReplicaState,
         store: InstanceStore
     ):
-        Leader.__init__(self, state, store)
-        Acceptor.__init__(self, state, store)
+        self.state = state
+        self.store = store
+        self.leader = Leader(state, store)
+        self.acceptor = Acceptor(state, store, self.leader)
 
-    def minimum_wait(self):
-        return self.store.timeout_store.minimum_wait()
+    def tick(self):
+        self.state.tick()
+
+    def check_timeouts_minimum_wait(self):
+        return self.acceptor.check_timeouts_minimum_wait()
 
     def check_timeouts(self):
-        for slot in self.store.timeout_store.query():
-            self.begin_explicit_prepare(slot)
+        self.acceptor.check_timeouts()
+
+    def execute_pending(self):
+        self.store.execute_all_pending()
 
