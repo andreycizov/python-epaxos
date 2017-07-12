@@ -2,7 +2,7 @@ from typing import List, NamedTuple
 
 from dsm.epaxos.command.state import AbstractCommand
 from dsm.epaxos.instance.state import Ballot, Slot, StateType
-from dsm.epaxos.network.serializer import _deserialize_namedtuple, _serialize_namedtuple
+from dsm.epaxos.network.serializer import _deserialize, _serialize
 
 
 class Payload:
@@ -21,12 +21,12 @@ class Packet(NamedTuple):
             'o': obj.origin,
             'd': obj.destination,
             't': obj.type,
-            'p': _serialize_namedtuple(obj.payload)
+            'p': _serialize(obj.payload)
         }
 
     @classmethod
     def deserialize(cls, json):
-        return cls(json['o'], json['d'], json['t'], _deserialize_namedtuple(TYPE_TO_PACKET[json['t']], json['p']))
+        return cls(json['o'], json['d'], json['t'], _deserialize(TYPE_TO_PACKET[json['t']], json['p']))
 
 
 class ClientRequest(NamedTuple, Payload):
