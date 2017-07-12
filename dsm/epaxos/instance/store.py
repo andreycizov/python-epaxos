@@ -161,19 +161,30 @@ class InstanceStore:
             current_slot = self.executed_cut[replica_id]
             current_slot = Slot(replica_id, current_slot.instance_id + 1)
 
+    def should_wait(self, slot: Slot, slots_to_wait: List[Slot]):
+        if len(slots_to_wait):
+            for slot_to_wait in slots_to_wait:
+                self.commit_expected[slot_to_wait].update({slot})
+            return True
+        else:
+            return False
+
     def execute(self, slot: Slot):
         if self.is_executed(slot):
             return
 
         assert self[slot].type == StateType.Committed
 
+        slots_to_wait = [dep_slot for dep_slot in self[slot].deps if self[dep_slot].type < StateType.Committed]
+
+        if self.should_wait(slot, slots_to_wait):
+            return
+
         graph = self._build_deps_graph(slot)
 
         slots_to_wait = [x for x in graph.keys() if self[x].type < StateType.Committed]
 
-        if len(slots_to_wait):
-            for slot_to_wait in slots_to_wait:
-                self.commit_expected[slot_to_wait].update({slot})
+        if self.should_wait(slot, slots_to_wait):
             return
 
         order = self._build_exec_order(graph)

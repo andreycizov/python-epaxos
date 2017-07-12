@@ -197,7 +197,7 @@ def replica_server(epoch: int, replica_id: int, replicas: Dict[int, ReplicaAddre
     #     print(pr.calibrate(10000))
     try:
         cli_logger()
-        context = zmq.Context.instance()
+        context = zmq.Context(len(replicas))
         rs = ReplicaServer(context, epoch, replica_id, replicas)
         rs.connect()
 
@@ -214,7 +214,7 @@ def replica_server(epoch: int, replica_id: int, replicas: Dict[int, ReplicaAddre
 def replica_client(peer_id: int, replicas: Dict[int, ReplicaAddress]):
     try:
         cli_logger()
-        context = zmq.Context.instance()
+        context = zmq.Context()
         rc = ReplicaClient(context, peer_id, replicas)
         rc.connect()
 
