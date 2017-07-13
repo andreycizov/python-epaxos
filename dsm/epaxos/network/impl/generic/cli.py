@@ -8,6 +8,8 @@ from typing import Dict, ClassVar
 
 import sys
 
+import numpy as np
+
 from dsm.epaxos.command.state import AbstractCommand
 from dsm.epaxos.network.impl.generic.client import ReplicaClient
 from dsm.epaxos.network.impl.generic.server import ReplicaAddress, ReplicaServer
@@ -68,22 +70,30 @@ def replica_client(cls: ClassVar[ReplicaClient], peer_id: int, replicas: Dict[in
     try:
         cli_logger()
 
+        TOTAL = 20000
+        EACH = 200
+        LAT_BUF = 10
+
+        latencies_mat = np.zeros(TOTAL)
+
         with cls(peer_id, replicas) as client:
             time.sleep(0.5)
 
             latencies = deque()
 
-            for i in range(20000):
+            for i in range(TOTAL):
                 lat, _ = client.request(AbstractCommand(random.randint(1, 1000000)))
                 latencies.append(lat)
+                latencies_mat[i] = lat
                 # time.sleep(1.)
                 # print(lat)
-                if i % 200 == 0:
+                if i % EACH == 0:
                     # print(latencies)
                     logger.info(f'Client `{peer_id}` DONE {i + 1} LAT_AVG={sum(latencies) / len(latencies)}')
 
-                if len(latencies) > 200:
+                if len(latencies) > LAT_BUF:
                     latencies.popleft()
             logger.info(f'Client `{peer_id}` DONE')
+        np.save(f'latencies-{peer_id}.npy', latencies_mat)
     except:
         logger.exception(f'Client {peer_id}')

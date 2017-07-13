@@ -3,7 +3,7 @@ from collections import deque
 
 import zmq
 
-from dsm.epaxos.network.impl.zeromq import client, server
+# from dsm.epaxos.network.impl.zeromq import server, client
 from dsm.epaxos.network.impl.generic.mapper import ReplicaReceiveChannel, ReplicaSendChannel
 from dsm.epaxos.network.packet import Packet
 from dsm.epaxos.network.serializer import deserialize_json, serialize_json
@@ -17,7 +17,7 @@ def serialize(packet: Packet):
     return repr
 
 
-def deserialize(body: bytes):
+def deserialize(body: bytes) -> Packet:
     # body = zlib.decompress(body)
     return deserialize_json(Packet, body)
 

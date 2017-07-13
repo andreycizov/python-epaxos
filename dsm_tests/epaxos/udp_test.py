@@ -34,9 +34,9 @@ def worker(n):
 
     first = True
     for task_nbr in range(COUNT):
-        data, addr = sock.recvfrom(2)
+        data, addr = sock.recvfrom(512)
         if len(data) and first:
-            print('\tXXX', data, addr)
+            print('\tXXX', len(data), addr)
             first = False
             # else:
             #     break

@@ -1,0 +1,3 @@
+- Joining of a replica (increase the epoch number, sync the state).
+- Leaving of a replica (can happen at any time, but we need to tell other replicas to know that).
+- Purging the history.

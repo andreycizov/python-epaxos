@@ -111,9 +111,11 @@ class ReplicaServer:
                     datetime.now(),
                     self.state.ticks,
                     self.state.seconds_per_tick,
-                    self.state.replica_id,
+                    self.state.replica_id,'\n',
+                    '\t',
                     sorted((y.name, len(list(x))) for y, x in
                            groupby(sorted([v.type for k, v in self.replica.store.instances.items()]))),
+                    '\n',
                     # sorted((k, v) for k, v in self.replica.store.executed_cut.items())
                     sorted([(k, v) for k, v in self.state.packet_counts.items()])
                 )

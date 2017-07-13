@@ -2,7 +2,8 @@ import json
 import typing
 from enum import Enum
 from functools import lru_cache
-from typing import NamedTuple
+
+import bson
 
 
 @lru_cache(maxsize=128)
@@ -69,3 +70,11 @@ def serialize_json(val):
 
 def deserialize_json(t, body):
     return _deserialize(t, json.loads(body.decode()))
+
+
+def serialize_bson(val):
+    return bson.dumps(_serialize(val))
+
+
+def deserialize_bson(t, body):
+    return _deserialize(t, bson.loads(body))
