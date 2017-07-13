@@ -75,12 +75,13 @@ class Acceptor(Behaviour, AcceptorInterface):
     def prepare_request(self, peer: int, slot: Slot, ballot: Ballot):
         inst = self._check_if_known(slot, ballot, True)
 
-        if inst is None:
-            self.leader._stop_leadership(slot)
+        if inst is None or inst.ballot >= ballot:
             self.state.channel.prepare_response_nack(peer, slot)
         else:
+            self.leader._stop_leadership(slot)
             self.state.channel.prepare_response_ack(peer, slot, inst.ballot, inst.command, inst.seq, inst.deps,
                                                     inst.type)
+            # self.store.increase_ballot(slot, ballot)
 
     def check_timeouts_minimum_wait(self):
         return self.store.timeout_store.minimum_wait()

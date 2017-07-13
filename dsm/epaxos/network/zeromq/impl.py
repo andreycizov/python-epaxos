@@ -3,6 +3,7 @@ import logging
 import random
 import signal
 import time
+from collections import deque
 from datetime import datetime, timedelta
 from itertools import groupby
 from typing import Dict, NamedTuple
@@ -44,6 +45,8 @@ class ReplicaServer:
         socket.setsockopt(zmq.ROUTER_HANDOVER, 1)
         socket.setsockopt(zmq.RCVBUF, 2 ** 20)
         socket.setsockopt(zmq.SNDBUF, 2 ** 20)
+        socket.sndhwm = 1000000
+        socket.rcvhwm = 1000000
         socket.setsockopt(zmq.LINGER, 0)
         socket.hwm = 50
         # socket.setsockopt(zmq.HWM, 20)
@@ -139,8 +142,7 @@ class ReplicaServer:
                     sorted((y.name, len(list(x))) for y, x in
                            groupby(sorted([v.type for k, v in self.replica.store.instances.items()]))),
                     # sorted((k, v) for k, v in self.replica.store.executed_cut.items())
-                    pkts_sent,
-                    pkts_rcvd
+                    sorted([(k, v) for k, v in self.state.packet_counts.items()])
                 )
 
 
@@ -167,7 +169,8 @@ class ReplicaClient:
 
     def connect(self, replica_id=None):
         if replica_id is None:
-            replica_id = random.choice(list(self.peer_addr.keys()))
+            # replica_id = random.choice(list(self.peer_addr.keys()))
+            replica_id = list(self.peer_addr.keys())[self.peer_id % len(self.peer_addr)]
 
         if self.replica_id:
             self.socket.disconnect(self.peer_addr[self.replica_id].replica_addr)
@@ -180,7 +183,7 @@ class ReplicaClient:
     def request(self, command: AbstractCommand):
         assert self.replica_id is not None
 
-        TIMEOUT = 1000
+        TIMEOUT = 10000
 
         self.channel.client_request(self.replica_id, command)
 
@@ -247,16 +250,19 @@ def replica_client(peer_id: int, replicas: Dict[int, ReplicaAddress]):
 
         time.sleep(0.5)
 
-        latencies = []
+        latencies = deque()
 
         for i in range(20000):
             lat, _ = rc.request(AbstractCommand(random.randint(1, 1000000)))
-            # latencies.append(lat)
+            latencies.append(lat)
             # time.sleep(1.)
             # print(lat)
             if i % 200 == 0:
                 # print(latencies)
-                logger.info(f'Client `{peer_id}` DONE {i + 1}')
+                logger.info(f'Client `{peer_id}` DONE {i + 1} LAT_AVG={sum(latencies) / len(latencies)}')
+
+            if len(latencies) > 200:
+                latencies.popleft()
         logger.info(f'Client `{peer_id}` DONE')
     except:
         logger.exception(f'Client {peer_id}')

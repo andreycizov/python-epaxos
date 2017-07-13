@@ -1,6 +1,8 @@
 from datetime import timedelta
 from typing import Set
 
+from collections import defaultdict
+
 from dsm.epaxos.network.peer import Channel
 
 
@@ -26,6 +28,8 @@ class ReplicaState:
         self.ticks = 0
         self.jiffies = jiffies
         self.seconds_per_tick = 1. / self.jiffies
+
+        self.packet_counts = defaultdict(int)
 
     def tick(self):
         self.ticks += 1

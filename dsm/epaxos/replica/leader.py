@@ -1,3 +1,4 @@
+import random
 from itertools import groupby
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
@@ -105,7 +106,14 @@ class Leader(Behaviour, LeaderInterface):
     @property
     def peers_fast(self):
         # TODO: we may order the peers here based on their latencies.
-        return {x for x in self.state.quorum_fast if x != self.state.replica_id}
+        return random.sample(self.peers_full, self.quorum_fast - 1)
+        #
+        # return {x for x in self.state.quorum_full if x != self.state.replica_id}
+
+    @property
+    def peers_accept(self):
+        # TODO: we may order the peers here based on their latencies
+        return random.sample(self.peers_full, self.quorum_slow - 1)
 
     @property
     def peers_full(self):
@@ -114,7 +122,7 @@ class Leader(Behaviour, LeaderInterface):
 
     @property
     def quorum_f(self):
-        return int(len(self.peers_fast) / 2)
+        return int(len(self.state.quorum_full) / 2.)
 
     @property
     def quorum_slow(self):
@@ -200,7 +208,7 @@ class Leader(Behaviour, LeaderInterface):
 
         self.store.accept(slot, inst.ballot, inst.command, inst.seq, inst.deps)
 
-        for peer in self.peers_full:
+        for peer in self.peers_accept:
             self.state.channel.accept_request(peer, slot, inst.ballot, inst.command, inst.seq, inst.deps)
 
     def finalise_accept(self, slot: Slot):
@@ -316,7 +324,7 @@ class Leader(Behaviour, LeaderInterface):
             phase = self[slot].phase  # type: AcceptLeaderPhase
             phase.replies.append(AcceptReply(peer))
 
-            if len(phase.replies) >= self.quorum_slow:
+            if len(phase.replies) + 1 >= self.quorum_slow:
                 self.begin_commit(slot)
 
     def accept_response_nack(self, peer: int, slot: Slot):

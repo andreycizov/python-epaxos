@@ -24,13 +24,15 @@ class ReplicaReceiveChannel(Channel):
         raise NotImplementedError()
 
     def receive(self, packet: Packet):
+        self.replica.state.packet_counts[packet.type] += 1
+
         p = packet.payload
         if isinstance(p, ClientRequest):
             self.replica.leader.client_request(packet.origin, p.command)
         else:
-            if random.random() > 0.99:
-                return
-
+            # if random.random() > 0.999:
+            #     return
+            #
             if isinstance(p, PreAcceptRequest):
                 self.replica.acceptor.pre_accept_request(packet.origin, p.slot, p.ballot, p.command, p.seq, p.deps)
             elif isinstance(p, PreAcceptResponseAck):
