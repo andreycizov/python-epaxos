@@ -30,7 +30,7 @@ def worker(n):
     work_receiver = context.socket(c.recv)
     work_receiver.identity = b'a'
     work_receiver.linger = 0
-    work_receiver.connect("tcp://127.0.0.1:5557")
+    work_receiver.init("tcp://127.0.0.1:5557")
     # work_receiver.send(b'a')
 
     for task_nbr in range(COUNT):
