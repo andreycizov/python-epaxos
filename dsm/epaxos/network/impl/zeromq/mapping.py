@@ -3,10 +3,10 @@ from collections import deque
 
 import zmq
 
-from dsm.epaxos.network.mapper import ReplicaSendChannel, ReplicaReceiveChannel
+from dsm.epaxos.network.impl.zeromq import impl
+from dsm.epaxos.network.mapper import ReplicaReceiveChannel, ReplicaSendChannel
 from dsm.epaxos.network.packet import Packet
-from dsm.epaxos.network.serializer import serialize_json, deserialize_json
-from dsm.epaxos.network.zeromq import impl
+from dsm.epaxos.network.serializer import deserialize_json, serialize_json
 
 logger = logging.getLogger(__name__)
 

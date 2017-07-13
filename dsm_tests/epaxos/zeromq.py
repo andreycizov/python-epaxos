@@ -3,7 +3,7 @@ import signal
 from multiprocessing import Process
 from typing import List
 
-from dsm.epaxos.network.zeromq.impl import replica_server, ReplicaAddress, replica_client
+from dsm.epaxos.network.impl.zeromq.impl import ReplicaAddress, replica_client, replica_server
 
 replicas = {
     1: ReplicaAddress('tcp://0.0.0.0:60001'),

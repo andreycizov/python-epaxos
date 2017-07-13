@@ -4,19 +4,18 @@ import random
 import signal
 import time
 from collections import deque
-from datetime import datetime
 from typing import Dict, Tuple
 
 import zmq
-from zmq import Context
 
 from dsm.epaxos.command.state import AbstractCommand
 from dsm.epaxos.network.impl.generic.client import ReplicaClient
-from dsm.epaxos.network.impl.generic.server import ReplicaServer, ReplicaAddress
+from dsm.epaxos.network.impl.generic.server import ReplicaAddress, ReplicaServer
+from dsm.epaxos.network.impl.zeromq.mapping import ZMQClientSendChannel, ZMQReplicaReceiveChannel, \
+    ZMQReplicaSendChannel, deserialize
 from dsm.epaxos.network.peer import Channel
-from dsm.epaxos.network.zeromq.mapping import deserialize, ZMQReplicaReceiveChannel, ZMQReplicaSendChannel, \
-    ZMQClientSendChannel
-from dsm.epaxos.network.zeromq.util import cli_logger
+
+from dsm.epaxos.network.impl.zeromq.util import cli_logger
 
 logger = logging.getLogger(__name__)
 
