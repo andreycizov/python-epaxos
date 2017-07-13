@@ -3,8 +3,8 @@ from collections import deque
 
 import zmq
 
-from dsm.epaxos.network.impl.zeromq import impl
-from dsm.epaxos.network.mapper import ReplicaReceiveChannel, ReplicaSendChannel
+from dsm.epaxos.network.impl.zeromq import client, server
+from dsm.epaxos.network.impl.generic.mapper import ReplicaReceiveChannel, ReplicaSendChannel
 from dsm.epaxos.network.packet import Packet
 from dsm.epaxos.network.serializer import deserialize_json, serialize_json
 
@@ -23,7 +23,7 @@ def deserialize(body: bytes):
 
 
 class ZMQReplicaReceiveChannel(ReplicaReceiveChannel):
-    def __init__(self, server: 'impl.ReplicaServer'):
+    def __init__(self, server: 'server.ZMQReplicaServer'):
         self.server = server
 
     @property
@@ -37,7 +37,7 @@ class ZMQReplicaReceiveChannel(ReplicaReceiveChannel):
 
 
 class ZMQReplicaSendChannel(ReplicaSendChannel):
-    def __init__(self, server: 'impl.ReplicaServer'):
+    def __init__(self, server: 'server.ZMQReplicaServer'):
         self.server = server
         self.queue = deque()
 
@@ -73,7 +73,7 @@ class ZMQReplicaSendChannel(ReplicaSendChannel):
 
 
 class ZMQClientSendChannel(ReplicaSendChannel):
-    def __init__(self, client: 'impl.ReplicaClient'):
+    def __init__(self, client: 'client.ReplicaClient'):
         self.client = client
 
     @property

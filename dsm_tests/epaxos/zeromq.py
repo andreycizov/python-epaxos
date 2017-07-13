@@ -3,7 +3,9 @@ import signal
 from multiprocessing import Process
 from typing import List
 
-from dsm.epaxos.network.impl.zeromq.impl import ReplicaAddress, replica_client, replica_server
+from dsm.epaxos.network.impl.generic.cli import ReplicaAddress, replica_client, replica_server
+from dsm.epaxos.network.impl.zeromq.client import ZMQReplicaClient
+from dsm.epaxos.network.impl.zeromq.server import ZMQReplicaServer
 
 replicas = {
     1: ReplicaAddress('tcp://0.0.0.0:60001'),
@@ -19,10 +21,10 @@ clients = list(range(100, 110))
 def main():
     ress = []  # type: List[Process]
     for replica_id in replicas.keys():
-        res = Process(target=replica_server, args=(0, replica_id, replicas), name=f'dsm-replica-{replica_id}')
+        res = Process(target=replica_server, args=(ZMQReplicaServer, 0, replica_id, replicas), name=f'dsm-replica-{replica_id}')
         ress.append(res)
     for client_id in clients:
-        res = Process(target=replica_client, args=(client_id, replicas), name=f'dsm-client-{client_id}')
+        res = Process(target=replica_client, args=(ZMQReplicaClient, client_id, replicas), name=f'dsm-client-{client_id}')
         ress.append(res)
     for res in ress:
         res.start()
