@@ -19,6 +19,7 @@ class AbstractCommand:
     def serialize(cls, obj):
         return {'i': obj.ident}
 
+# If an instance has agreed on a command, then it will not be changed by the quorum.
 
 class EmptyCommand(AbstractCommand):
     def __init__(self):
