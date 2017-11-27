@@ -1,3 +1,5 @@
+import random
+
 import zmq
 
 from dsm.epaxos.command.state import AbstractCommand
@@ -35,11 +37,17 @@ class ZMQReplicaClient(ReplicaClient):
 
     def connect(self, replica_id=None):
         if self.leader_id is None:
-            # replica_id = random.choice(list(self.peer_addr.keys()))
-            replica_id = list(self.peer_addr.keys())[self.peer_id % len(self.peer_addr)]
-            self._replica_id = replica_id
+            pass
         else:
             self.socket.disconnect(self.peer_addr[self.leader_id].replica_addr)
+
+        if len(self.blacklisted) == len(list(self.peer_addr.keys())):
+            self.blacklisted = []
+
+        while replica_id is None or replica_id in self.blacklisted:
+            replica_id = random.choice(list(self.peer_addr.keys()))
+
+        self._replica_id = replica_id
 
         self.socket.connect(self.peer_addr[replica_id].replica_addr)
 
@@ -56,7 +64,7 @@ class ZMQReplicaClient(ReplicaClient):
         return deserialize(payload)
 
     def close(self):
-        self.socket.disconnect()
+        self.socket.disconnect(self.peer_addr[self._replica_id].replica_addr)
 
     def __enter__(self):
         self.connect()

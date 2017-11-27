@@ -83,6 +83,10 @@ class LeaderInterface:
     ):
         raise NotImplementedError()
 
+    def diverged_response(self,
+                          peer: int):
+        raise NotImplementedError()
+
     def prepare_response_nack(
         self,
         peer: int,

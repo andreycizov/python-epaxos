@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from itertools import groupby
+from time import sleep
 from typing import NamedTuple, Dict, Tuple
 
 from dsm.epaxos.command.deps.default import DefaultDepsStore
@@ -34,7 +35,7 @@ class ReplicaServer:
             set(peer_addr.keys()),
             set(peer_addr.keys()),
             True,
-            5
+            3
         )
 
         deps_store = DefaultDepsStore()
@@ -75,6 +76,9 @@ class ReplicaServer:
         pkts_rcvd = 0
         pkts_sent = 0
 
+        start_time = datetime.now()
+        has_slept = False
+
         while True:
             min_wait = self.replica.check_timeouts_minimum_wait()
             min_wait_poll = max(0, self.state.seconds_per_tick - poll_delta)
@@ -85,14 +89,21 @@ class ReplicaServer:
                 min_wait = min_wait_poll
 
             poll_result = self.poll(min_wait)
-            poll_delta = (datetime.now() - last_tick_time).total_seconds()
+            now_time = datetime.now()
+            poll_delta = (now_time - last_tick_time).total_seconds()
 
             if poll_delta > self.state.seconds_per_tick:
                 self.replica.tick()
                 self.replica.check_timeouts()
-                last_tick_time = last_tick_time + timedelta(seconds=self.state.seconds_per_tick)
+                last_tick_time = now_time - timedelta(seconds=self.state.seconds_per_tick - poll_delta)
 
             pkts_sent += self.send()
+
+            if (datetime.now() - start_time ).total_seconds() > 20 and self.state.replica_id == 1 and not has_slept:
+                logger.info('Sleeping')
+                sleep(40)
+                logger.info('Sleept')
+                has_slept = True
 
             if poll_result:
                 rcvd = self.recv()

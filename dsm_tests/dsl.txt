@@ -1,0 +1,9 @@
+cap(z)
+	rel(z)
+		if a > b
+			z(cunning(b))
+		else
+			z(leathery(a))
+	rel(b)
+		
+

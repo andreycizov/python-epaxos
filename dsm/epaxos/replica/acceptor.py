@@ -23,8 +23,14 @@ class Acceptor(Behaviour, AcceptorInterface):
         super().__init__(state, store)
         self.leader = leader
 
-    def _check_if_known(self, slot: Slot, ballot: Ballot, disallow_empty=False):
+    def _check_if_known(self, peer: int, slot: Slot, ballot: Ballot, disallow_empty=False):
         inst = self.store[slot]
+
+        last_cut_for_slot = self.store.slot_cut.get(slot.replica_id)
+
+        if last_cut_for_slot and last_cut_for_slot > slot:
+            self.state.channel.diverged_response(peer)
+            return None
 
         if inst.ballot > ballot or (disallow_empty and inst.type == StateType.Prepared):
             return None
@@ -36,7 +42,7 @@ class Acceptor(Behaviour, AcceptorInterface):
         seq: int,
         deps: List[Slot]):
 
-        inst = self._check_if_known(slot, ballot)
+        inst = self._check_if_known(peer, slot, ballot)
 
         if inst is None or inst.type > StateType.PreAccepted:
             self.state.channel.pre_accept_response_nack(peer, slot)
@@ -48,9 +54,10 @@ class Acceptor(Behaviour, AcceptorInterface):
 
     def accept_request(self, peer: int, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int,
                        deps: List[Slot]):
-        inst = self._check_if_known(slot, ballot)
+        inst = self._check_if_known(peer, slot, ballot)
 
         if inst is None or inst.type > StateType.Accepted:
+            # Original implementation just ignores the current status otherwise.
             self.state.channel.accept_response_nack(peer, slot)
         else:
             self.leader._stop_leadership(slot)
@@ -59,7 +66,7 @@ class Acceptor(Behaviour, AcceptorInterface):
 
     def commit_request(self, peer: int, slot: Slot, ballot: Ballot, seq: int, command: AbstractCommand,
                        deps: List[Slot]):
-        inst = self._check_if_known(slot, ballot)
+        inst = self._check_if_known(peer, slot, ballot)
 
         # We check for the StateType here, since if were required to Commit after having already committed -
         # then the leader of ExplicitPrepare phase has missed our reply.
@@ -73,7 +80,7 @@ class Acceptor(Behaviour, AcceptorInterface):
             self.store.commit(slot, ballot, command, seq, deps)
 
     def prepare_request(self, peer: int, slot: Slot, ballot: Ballot):
-        inst = self._check_if_known(slot, ballot, True)
+        inst = self._check_if_known(peer, slot, ballot, True)
 
         if inst is None or inst.ballot >= ballot:
             self.state.channel.prepare_response_nack(peer, slot)
@@ -88,4 +95,5 @@ class Acceptor(Behaviour, AcceptorInterface):
 
     def check_timeouts(self):
         for slot in self.store.timeout_store.query():
+            # logger.debug(f'{self.state.replica_id} explicit prepare {slot}')
             self.leader.begin_explicit_prepare(slot)

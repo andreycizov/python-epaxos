@@ -1,6 +1,8 @@
 import struct
 
 # from dsm.epaxos.network.impl.udp import server, client
+import zlib
+
 from dsm.epaxos.network.impl.generic.mapper import ReplicaReceiveChannel, ReplicaSendChannel
 from dsm.epaxos.network.packet import ClientRequest, Packet
 from dsm.epaxos.network.serializer import deserialize_bson, serialize_bson, deserialize_json, serialize_json
@@ -10,6 +12,8 @@ CLIENT_REQUEST = ClientRequest.__name__
 
 def serialize(packet: Packet):
     bts = serialize_json(packet)
+
+    # bts = zlib.compress(bts)
 
     len_bts = struct.pack('I', len(bts))
 
@@ -50,7 +54,11 @@ class UDPReplicaSendChannel(ReplicaSendChannel):
 
         body = serialize(packet)
 
-        self.server.socket_send.sendto(body, self.server.clients[packet.destination])
+
+        try:
+            self.server.socket_send.sendto(body, self.server.clients[packet.destination])
+        except OSError:
+            print(f'Failed to send {len(body)} {body}')
 
 
 class UDPClientSendChannel(ReplicaSendChannel):

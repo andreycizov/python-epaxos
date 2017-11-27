@@ -27,6 +27,9 @@ class InstanceStore:
 
         self.instances = {}  # type: Dict[Slot, InstanceState]
 
+        self.slot_cut = {}  # type: Dict[int, Slot]
+        self.last_cp = None # type: Optional[Slot]
+
         self.executed_cut = {}  # type: Dict[int, Slot]
 
         self.executed = {}  # type: Dict[Slot, bool]
@@ -35,6 +38,8 @@ class InstanceStore:
         self.execute_log = deque()  # type: Deque[List[Slot]]
 
         self.commit_expected = defaultdict(set)  # type: Dict[Slot, Set[Slot]]
+
+        self.client_rep = dict()
 
     def __contains__(self, item: Slot):
         return item in self.instances
@@ -47,6 +52,8 @@ class InstanceStore:
         self.instances[slot] = new_inst
 
         self.deps_store.update(slot, inst, new_inst)
+
+        # todo: so every new update of the instance sets a new timeout
         self.timeout_store.update(slot, inst, new_inst)
 
     def __getitem__(self, slot: Slot) -> InstanceState:
@@ -197,8 +204,47 @@ class InstanceStore:
         return order
 
     def execute_all_pending(self):
-        while len(self.execute_pending):
-            cmds = self.execute(self.execute_pending.popleft())
+        def last(iter_obj):
+            r = None
+            for x in iter_obj:
+                r = x
+            if r is None:
+                raise ValueError()
+            return r
 
-            # if cmds:
-            #     logger.info(f'Executed {cmds}')
+        from itertools import groupby
+        while len(self.execute_pending):
+            cmds = self.execute(self.execute_pending.popleft())  # type: List[Slot]
+
+            if cmds:
+                for cmd in cmds:
+                    act = self[cmd]  # type: PostPreparedState
+                    prev_act = self.instances.get(self.last_cp)  # type: PostPreparedState
+
+                    if act.command.ident == 0 and prev_act:
+
+                        cut = {k: last(v) for k, v in groupby(act.deps, key=lambda x: x.replica_id)}
+                        for k, v in cut.items():
+                            zz = [isinstance(x, CommittedState) for k2, x in self.instances.items() if k2 < v and k2.replica_id == v.replica_id]
+                            try:
+                                assert all(zz)
+                            except:
+                                print(k, prev_act, [x for k2, x in self.instances.items() if k2 < v and not isinstance(x, CommittedState)])
+                        self.slot_cut = {**self.slot_cut, **cut}
+
+                        print('CP at', self.slot_cut)
+                    if act.command.ident == 0:
+                        self.last_cp = cmd
+
+                    if cmd in self.client_rep:
+                        self.state.channel.client_response(self.client_rep[cmd], act.command)
+                        del self.client_rep[cmd]
+
+            continue
+            if cmds:
+                print('EXEC START')
+                for cmd in cmds:
+                    print(self[cmd].command)
+                print('EXEC END')
+
+# todo: how do we solve issues where a new actor is required ?

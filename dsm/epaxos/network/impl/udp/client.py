@@ -1,3 +1,4 @@
+import random
 import socket
 
 import select
@@ -15,6 +16,7 @@ class UDPReplicaClient(ReplicaClient):
         *args
     ):
         super().__init__(*args)
+        self.blacklisted = []
 
     def init(self, peer_id: int) -> Channel:
         self.socket = socket.socket(
@@ -23,7 +25,7 @@ class UDPReplicaClient(ReplicaClient):
         )
         # self.socket.settimeout(0)
 
-        self._replica_id = None
+        self._replica_id = random.choice(list(self.peer_addr.keys()))
 
         self.clients = {k: _addr_conv(self.peer_addr, k) for k in self.peer_addr.keys()}
 
@@ -35,8 +37,13 @@ class UDPReplicaClient(ReplicaClient):
 
     def connect(self, replica_id=None):
         if replica_id is None:
-            # replica_id = random.choice(list(self.peer_addr.keys()))
-            replica_id = list(self.peer_addr.keys())[self.peer_id % len(self.peer_addr)]
+            if len(self.blacklisted) == len(list(self.peer_addr.keys())):
+                self.blacklisted = []
+
+            while replica_id is None or replica_id in self.blacklisted:
+                replica_id = random.choice(list(self.peer_addr.keys()))
+
+            # replica_id = list(self.peer_addr.keys())[self.peer_id % len(self.peer_addr)]
 
         self._replica_id = replica_id
 

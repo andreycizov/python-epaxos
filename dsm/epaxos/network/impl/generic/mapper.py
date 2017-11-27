@@ -7,7 +7,7 @@ from dsm.epaxos.command.state import AbstractCommand
 from dsm.epaxos.instance.state import Ballot, Slot, StateType
 from dsm.epaxos.network.packet import Packet, ClientRequest, PreAcceptRequest, PreAcceptResponseAck, \
     PreAcceptResponseNack, AcceptRequest, AcceptResponseAck, AcceptResponseNack, CommitRequest, PrepareRequest, \
-    PrepareResponseAck, PrepareResponseNack, ClientResponse, Payload
+    PrepareResponseAck, PrepareResponseNack, ClientResponse, Payload, DivergedResponse
 from dsm.epaxos.network.peer import Channel
 from dsm.epaxos.replica.replica import Replica
 from dsm.epaxos.replica.state import ReplicaState
@@ -52,6 +52,8 @@ class ReplicaReceiveChannel(Channel):
             elif isinstance(p, PrepareResponseAck):
                 self.replica.leader.prepare_response_ack(packet.origin, p.slot, p.ballot, p.command, p.seq, p.deps,
                                                          p.state)
+            elif isinstance(p, DivergedResponse):
+                self.replica.leader.diverged_response(packet.origin, p.slot)
             elif isinstance(p, PrepareResponseNack):
                 self.replica.leader.prepare_response_nack(packet.origin, p.slot)
             else:
@@ -68,6 +70,7 @@ class ReplicaSendChannel(Channel):
 
     def send(self, peer: int, payload: Payload):
         self.send_packet(Packet(self.peer_id, peer, str(payload.__class__.__name__), payload))
+
 
     def pre_accept_request(
         self,
@@ -144,6 +147,10 @@ class ReplicaSendChannel(Channel):
         state: StateType
     ):
         self.send(peer, PrepareResponseAck(slot, ballot, command, seq, deps, state))
+
+    def diverged_response(self,
+                          peer: int):
+        self.send(peer, DivergedResponse(Slot(0, 0)))
 
     def prepare_response_nack(
         self,

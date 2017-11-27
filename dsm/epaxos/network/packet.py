@@ -95,6 +95,10 @@ class PrepareResponseAck(NamedTuple, Payload):
     state: StateType
 
 
+class DivergedResponse(NamedTuple, Payload):
+    slot: Slot
+
+
 class PrepareResponseNack(NamedTuple, Payload):
     slot: Slot
 

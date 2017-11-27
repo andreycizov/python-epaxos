@@ -28,7 +28,7 @@ def myplot(x, y, nb=32, xsize=500, ysize=500):
     extent = R.get_extent()
     for i, j in zip(xrange(4), [x0,x0,y0,y0]):
         extent[i] += j
-    print extent
+    # print extent
     return img, extent
 
 def main():

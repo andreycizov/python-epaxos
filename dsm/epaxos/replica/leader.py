@@ -81,6 +81,56 @@ class ExplicitPrepareLeaderPhase(LeaderStatePhase):
         self.replies_nack = 0
 
 
+def lead(slot, allow_fast):
+    self._start_leadership(slot, PreAcceptLeaderPhase(), client_peer)
+
+    inst = self.store[slot]
+
+    if command:
+        self.store.pre_accept(slot, inst.ballot, command)
+    else:
+        assert isinstance(inst, PostPreparedState)
+        self.store.pre_accept(slot, inst.ballot, inst.command)
+
+    inst = self.store[slot]
+
+    for peer in self.peers_fast:
+        # Timeouts on PreAcceptRequest are guaranteed to be handled by the Acceptor part of the algorithm
+        self.state.channel.pre_accept_request(peer, slot, inst.ballot, inst.command, inst.seq, inst.deps)
+
+    while True:
+        x = yield PreAcceptResponse()
+
+        if x is Accepted:
+            pass
+        elif x is Timeout:
+            yield RestartLeadership()
+            return
+
+        if size > XXX:
+            break
+
+    inst = self.store[slot]
+
+    if allow_fast and (
+            all(x.deps == inst.deps for x in replies) and
+            all(x.seq == inst.seq for x in replies)
+    ):
+        yield from leader_commit()
+    else:
+        seq = max({x.seq for x in replies})
+        deps = sorted(set(reduce(lambda a, b: a + b, (x.deps for x in replies), list())))
+
+        inst = copy(inst)
+
+        # assert isinstance(inst, PreAcceptedState), repr(inst)
+
+        inst.seq = seq
+        inst.deps = deps
+
+        yield from leader_accept()
+
+
 class Leader(Behaviour, LeaderInterface):
     def __init__(
         self,
@@ -106,7 +156,7 @@ class Leader(Behaviour, LeaderInterface):
     @property
     def peers_fast(self):
         # TODO: we may order the peers here based on their latencies.
-        return random.sample(self.peers_full, self.quorum_fast - 1)
+        return {x for x in self.state.quorum_full if x != self.state.replica_id}
         #
         # return {x for x in self.state.quorum_full if x != self.state.replica_id}
 
@@ -133,6 +183,8 @@ class Leader(Behaviour, LeaderInterface):
         return self.quorum_f * 2
 
     def _response_slot_state_check(self, slot: Slot, required_state: LeaderStateType):
+        self.store[slot] = self.store[slot]
+
         if slot not in self:
             # logger.warning(
             #     f'Leader `{self.state.replica_id}` Slot `{slot}` is not leading <anymore> at this replica')
@@ -162,7 +214,8 @@ class Leader(Behaviour, LeaderInterface):
 
         self.begin_pre_accept(slot, command, client_peer)
 
-    def begin_pre_accept(self, slot: Slot, command: Optional[AbstractCommand] = None, client_peer: Optional[int] = None):
+    def begin_pre_accept(self, slot: Slot, command: Optional[AbstractCommand] = None,
+                         client_peer: Optional[int] = None):
         self._start_leadership(slot, PreAcceptLeaderPhase(), client_peer)
 
         inst = self.store[slot]
@@ -225,7 +278,7 @@ class Leader(Behaviour, LeaderInterface):
 
         client_peer = self[slot].peer_client
         if client_peer:
-            self.state.channel.client_response(client_peer, self.store[slot].command)
+            self.store.client_rep[slot] = client_peer
 
         for peer in self.peers_full:
             self.state.channel.commit_request(peer, slot, inst.ballot, inst.command, inst.seq, inst.deps)
@@ -234,6 +287,10 @@ class Leader(Behaviour, LeaderInterface):
 
     def finalise_commit(self, slot: Slot):
         self._stop_leadership(slot)
+
+    def diverged_response(self,
+                          peer: int):
+        raise NotImplementedError(f'I HAD DIVERGED {self.state.replica_id}')
 
     def begin_explicit_prepare(self, slot: Slot):
         self._start_leadership(slot, ExplicitPrepareLeaderPhase())
@@ -246,25 +303,33 @@ class Leader(Behaviour, LeaderInterface):
         # Fake sending a PrepareRequest to ourselves
         inst = self.store[slot]
 
-        if isinstance(inst, PostPreparedState):
-            phase = self[slot].phase  # type: ExplicitPrepareLeaderPhase
-            phase.replies.append(
-                ExplicitPrepareReply(self.state.replica_id, inst.ballot, inst.command, inst.seq, inst.deps, inst.type))
+        # if isinstance(inst, PostPreparedState):
+        #     phase = self[slot].phase  # type: ExplicitPrepareLeaderPhase
+        #     phase.
 
     def finalise_explicit_prepare(self, slot: Slot, replies: List[ExplicitPrepareReply]):
+        own_inst = self.store[slot]
+        replies = list(replies)
+        replies.append(
+            ExplicitPrepareReply(self.state.replica_id, own_inst.ballot, own_inst.command, own_inst.seq, own_inst.deps,
+                                 own_inst.type))
         max_state = max((x.state for x in replies), default=StateType.Prepared)
 
-        own_inst = self.store[slot]
+        # logger.debug(f'{self.state.replica_id} {slot} due to ACK {max_state.name}')
 
         if max_state == StateType.Committed:
             reply = [x for x in replies if x.state == StateType.Committed][0]
             self.store.commit(slot, own_inst.ballot, reply.command, reply.seq, reply.deps)
             self.begin_commit(slot)
+        elif not len(replies) + 1 >= self.quorum_slow:
+            pass
         elif max_state == StateType.Accepted:
             reply = [x for x in replies if x.state == StateType.Accepted][0]
             self.store.accept(slot, own_inst.ballot, reply.command, reply.seq, reply.deps)
             self.begin_accept(slot)
         elif max_state == StateType.PreAccepted:
+            # todo recovery instance is the instance with the highest seq, ballot
+
             def key(x: ExplicitPrepareReply):
                 return x.command, x.seq, x.deps
 
@@ -277,7 +342,7 @@ class Leader(Behaviour, LeaderInterface):
             selected = [
                 y
                 for x, y in selected
-                if len(y) >= self.quorum_slow - 1 and
+                if len(y) >= self.quorum_slow and
                    not any(z.peer == self.store[slot].slot.replica_id for z in y)
             ]
 
@@ -341,8 +406,10 @@ class Leader(Behaviour, LeaderInterface):
         phase = self[slot].phase  # type: ExplicitPrepareLeaderPhase
         phase.replies.append(ExplicitPrepareReply(peer, ballot, command, seq, deps, state))
 
-        if len(phase.replies) >= self.quorum_slow:
-            self.finalise_explicit_prepare(slot, phase.replies)
+        self.store[slot] = self.store[slot]
+
+        # logger.debug(f'{self.state.replica_id} {slot} due to ACK {self.store[slot].ballot} <- {ballot}')
+        self.finalise_explicit_prepare(slot, phase.replies)
 
     def prepare_response_nack(self, peer: int, slot: Slot):
         if self._response_slot_state_check(slot, LeaderStateType.ExplicitPrepare):
@@ -351,5 +418,12 @@ class Leader(Behaviour, LeaderInterface):
         phase = self[slot].phase  # type: ExplicitPrepareLeaderPhase
         phase.replies_nack += 1
 
+        # logger.debug(f'{self.state.replica_id} {slot} due to NACK {self.store[slot].ballot}')
+
+        self.store.timeout_store.update(slot, self.store[slot], self.store[slot])
+
+        # self._stop_leadership(slot)
+
         if phase.replies_nack >= self.quorum_slow:
+            # logger.debug(f'{self.state.replica_id} {slot} due to NACK {self.store[slot].ballot}')
             self.begin_explicit_prepare(slot)

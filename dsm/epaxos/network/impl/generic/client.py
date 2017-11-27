@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Dict
 
 from dsm.epaxos.command.state import AbstractCommand
-from dsm.epaxos.network.impl.generic.server import ReplicaAddress
+from dsm.epaxos.network.impl.generic.server import ReplicaAddress, logger
 from dsm.epaxos.network.peer import Channel
 
 
@@ -16,6 +16,7 @@ class ReplicaClient:
         self.peer_addr = peer_addr
 
         self.channel = self.init(peer_id)
+        self.blacklisted = []
 
     def init(self, peer_id: int) -> Channel:
         raise NotImplementedError()
@@ -36,7 +37,7 @@ class ReplicaClient:
     def recv(self):
         raise NotImplementedError()
 
-    def request(self, command: AbstractCommand, timeout=10.):
+    def request(self, command: AbstractCommand, timeout=10):
         assert self.leader_id is not None
 
         self.send(command)
@@ -55,4 +56,7 @@ class ReplicaClient:
                 return latency, rtn
             else:
                 # logger.info(f'Client `{self.peer_id}` -> {self.replica_id} RetrySend={command}')
+                self.blacklisted = [self._replica_id]
+                logger.info(f'{self.peer_id} Blacklisted {self._replica_id}')
+                self.connect()
                 self.send(command)
