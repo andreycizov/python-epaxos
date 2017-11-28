@@ -34,8 +34,7 @@ class ReplicaServer:
             epoch, replica_id,
             set(peer_addr.keys()),
             set(peer_addr.keys()),
-            True,
-            3
+            True
         )
 
         deps_store = DefaultDepsStore()

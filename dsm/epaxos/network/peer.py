@@ -2,6 +2,7 @@ from typing import List
 
 from dsm.epaxos.command.state import AbstractCommand
 from dsm.epaxos.instance.state import Slot, Ballot, StateType
+from dsm.epaxos.network.packet import Payload
 
 
 class AcceptorInterface:
@@ -95,6 +96,11 @@ class LeaderInterface:
         raise NotImplementedError()
 
 
+class DirectInterface:
+    def packet(self, peer: int, payload: Payload):
+        pass
+
+
 class ClientInterface:
     def client_response(
         self,
@@ -104,5 +110,5 @@ class ClientInterface:
         raise NotImplementedError()
 
 
-class Channel(AcceptorInterface, ClientInterface, LeaderInterface):
+class Channel(AcceptorInterface, ClientInterface, LeaderInterface, DirectInterface):
     pass

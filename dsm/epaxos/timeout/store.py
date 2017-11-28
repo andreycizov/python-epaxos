@@ -1,4 +1,5 @@
 import heapq
+import random
 from datetime import datetime, timedelta
 from typing import NamedTuple, List, Dict, Optional
 
@@ -28,7 +29,7 @@ class TimeoutStore:
         return datetime.now()
 
     def update(self, slot: Slot, old_inst: InstanceState, new_inst: InstanceState):
-        last_state = TimeoutStoreState(self.state.ticks + self.state.timeout, slot, new_inst.ballot, new_inst.type)
+        last_state = TimeoutStoreState(self.state.ticks + self.state.timeout + random.randint(0, self.state.timeout_range), slot, new_inst.ballot, new_inst.type)
 
         if new_inst.type < StateType.Committed:
             self.last_states[slot] = last_state

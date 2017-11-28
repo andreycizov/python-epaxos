@@ -1,2 +1,4 @@
 tarjan
 pyzmq
+numpy
+bson

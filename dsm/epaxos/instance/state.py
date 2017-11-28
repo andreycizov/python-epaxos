@@ -1,4 +1,5 @@
-from typing import List, NamedTuple
+from copy import copy
+from typing import List, NamedTuple, Any
 
 from enum import IntEnum
 
@@ -44,6 +45,24 @@ class Ballot(NamedTuple):
         return cls(*json)
 
 
+class Stage(IntEnum):
+    Prepared = 0
+    PreAccepted = 1
+    Accepted = 2
+    Committed = 4
+
+
+class Payload(NamedTuple):
+    body: Any
+
+
+class Status(NamedTuple):
+    payload: Payload
+    stage: Stage
+    seq: int
+    deps: List[Slot]
+
+
 class StateType(IntEnum):
     # We do not have a command for this state yet.
     Prepared = 0
@@ -62,6 +81,11 @@ class InstanceState:
     def __repr__(self):
         return f'{self.__class__.__name__}({self.slot}, {self.ballot})'
 
+    def with_ballot(self, ballot):
+        r = copy(self)
+        r.ballot = ballot
+        return r
+
 
 class PreparedState(InstanceState):
     type = StateType.Prepared
@@ -76,6 +100,21 @@ class PostPreparedState(InstanceState):
         self.deps = deps
         super().__init__(slot, ballot)
 
+    def update(self, seq, deps, command=None):
+        r = copy(self)
+        r.seq = seq
+        r.deps = deps
+        if command:
+            r.command = command
+        return r
+
+    def promote(self, type) -> 'PostPreparedState':
+        return STATE_TYPES_MAP[type](self.slot, self.ballot, self.command, self.seq, self.deps)
+
+    @classmethod
+    def noop(cls, slot, ballot):
+        return cls(slot, ballot, Noop, 0, [])
+
 
 class PreAcceptedState(PostPreparedState):
     type = StateType.PreAccepted
@@ -87,3 +126,13 @@ class AcceptedState(PostPreparedState):
 
 class CommittedState(PostPreparedState):
     type = StateType.Committed
+
+
+STATE_TYPES = [
+    PreparedState,
+    PreAcceptedState,
+    AcceptedState,
+    CommittedState,
+]
+
+STATE_TYPES_MAP = {x.type: x for x in STATE_TYPES}

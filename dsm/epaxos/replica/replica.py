@@ -1,6 +1,8 @@
 from dsm.epaxos.instance.store import InstanceStore
-from dsm.epaxos.replica.acceptor import Acceptor
-from dsm.epaxos.replica.leader import Leader
+# from dsm.epaxos.replica.acceptor import Acceptor
+from dsm.epaxos.replica.acceptor_direct import AcceptorCoroutine
+# from dsm.epaxos.replica.leader import Leader
+from dsm.epaxos.replica.leader_direct import LeaderCoroutine
 from dsm.epaxos.replica.state import ReplicaState
 
 
@@ -12,8 +14,8 @@ class Replica:
     ):
         self.state = state
         self.store = store
-        self.leader = Leader(state, store)
-        self.acceptor = Acceptor(state, store, self.leader)
+        self.leader = LeaderCoroutine(state, store)
+        self.acceptor = AcceptorCoroutine(state, store, self.leader)
 
     def tick(self):
         self.state.tick()

@@ -37,7 +37,7 @@ class ReplicaClient:
     def recv(self):
         raise NotImplementedError()
 
-    def request(self, command: AbstractCommand, timeout=10):
+    def request(self, command: AbstractCommand, timeout=0.5):
         assert self.leader_id is not None
 
         self.send(command)
@@ -57,6 +57,6 @@ class ReplicaClient:
             else:
                 # logger.info(f'Client `{self.peer_id}` -> {self.replica_id} RetrySend={command}')
                 self.blacklisted = [self._replica_id]
-                logger.info(f'{self.peer_id} Blacklisted {self._replica_id}')
+                # logger.info(f'{self.peer_id} Blacklisted {self._replica_id}')
                 self.connect()
                 self.send(command)

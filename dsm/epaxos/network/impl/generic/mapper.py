@@ -8,7 +8,7 @@ from dsm.epaxos.instance.state import Ballot, Slot, StateType
 from dsm.epaxos.network.packet import Packet, ClientRequest, PreAcceptRequest, PreAcceptResponseAck, \
     PreAcceptResponseNack, AcceptRequest, AcceptResponseAck, AcceptResponseNack, CommitRequest, PrepareRequest, \
     PrepareResponseAck, PrepareResponseNack, ClientResponse, Payload, DivergedResponse
-from dsm.epaxos.network.peer import Channel
+from dsm.epaxos.network.peer import Channel, DirectInterface
 from dsm.epaxos.replica.replica import Replica
 from dsm.epaxos.replica.state import ReplicaState
 
@@ -27,37 +27,45 @@ class ReplicaReceiveChannel(Channel):
         self.replica.state.packet_counts[packet.type] += 1
 
         p = packet.payload
-        if isinstance(p, ClientRequest):
-            self.replica.leader.client_request(packet.origin, p.command)
+        if random.random() > 0.99:
+            return
+        MAP = {
+            ClientRequest: ('leader', 'client_request', lambda p: (packet.origin, p.command)),
+            PreAcceptRequest: ('acceptor', 'pre_accept_request',
+                               lambda p: (packet.origin, p.slot, p.ballot, p.command, p.seq, p.deps)),
+            PreAcceptResponseAck: (
+                'leader', 'pre_accept_response_ack', lambda p: (packet.origin, p.slot, p.ballot, p.seq, p.deps)),
+            PreAcceptResponseNack: ('leader', 'pre_accept_response_nack', lambda p: (packet.origin, p.slot)),
+            AcceptRequest: (
+                'acceptor', 'accept_request', lambda p: (packet.origin, p.slot, p.ballot, p.command, p.seq, p.deps)),
+            AcceptResponseAck: ('leader', 'accept_response_ack', lambda p: (packet.origin, p.slot, p.ballot)),
+            AcceptResponseNack: ('leader', 'accept_response_nack', lambda p: (packet.origin, p.slot)),
+            CommitRequest: (
+                'acceptor', 'commit_request', lambda p: (packet.origin, p.slot, p.ballot, p.seq, p.command, p.deps)),
+            PrepareRequest: ('acceptor', 'prepare_request', lambda p: (packet.origin, p.slot, p.ballot)),
+            PrepareResponseAck: (
+                'leader', 'prepare_response_ack', lambda p: (packet.origin, p.slot, p.ballot, p.command, p.seq, p.deps,
+                                                             p.state)),
+            DivergedResponse: ('leader', 'diverged_response', lambda p: (packet.origin)),
+            PrepareResponseNack: ('leader', 'prepare_response_nack', lambda p: (packet.origin, p.slot)),
+        }
+
+        mapped = MAP.get(p.__class__)
+
+        if mapped:
+            dest, call, lam = mapped
+
+            dest = getattr(self.replica, dest)
+
+            if isinstance(dest, DirectInterface):
+                dest.packet(packet.origin, p)
+                return
+
+            call = getattr(dest, call)
+
+            call(*lam(p))
         else:
-            # if random.random() > 0.999:
-            #     return
-            #
-            if isinstance(p, PreAcceptRequest):
-                self.replica.acceptor.pre_accept_request(packet.origin, p.slot, p.ballot, p.command, p.seq, p.deps)
-            elif isinstance(p, PreAcceptResponseAck):
-                self.replica.leader.pre_accept_response_ack(packet.origin, p.slot, p.ballot, p.seq, p.deps)
-            elif isinstance(p, PreAcceptResponseNack):
-                self.replica.leader.pre_accept_response_nack(packet.origin, p.slot)
-            elif isinstance(p, AcceptRequest):
-                self.replica.acceptor.accept_request(packet.origin, p.slot, p.ballot, p.command, p.seq, p.deps)
-            elif isinstance(p, AcceptResponseAck):
-                self.replica.leader.accept_response_ack(packet.origin, p.slot, p.ballot)
-            elif isinstance(p, AcceptResponseNack):
-                self.replica.leader.accept_response_nack(packet.origin, p.slot)
-            elif isinstance(p, CommitRequest):
-                self.replica.acceptor.commit_request(packet.origin, p.slot, p.ballot, p.seq, p.command, p.deps)
-            elif isinstance(p, PrepareRequest):
-                self.replica.acceptor.prepare_request(packet.origin, p.slot, p.ballot)
-            elif isinstance(p, PrepareResponseAck):
-                self.replica.leader.prepare_response_ack(packet.origin, p.slot, p.ballot, p.command, p.seq, p.deps,
-                                                         p.state)
-            elif isinstance(p, DivergedResponse):
-                self.replica.leader.diverged_response(packet.origin, p.slot)
-            elif isinstance(p, PrepareResponseNack):
-                self.replica.leader.prepare_response_nack(packet.origin, p.slot)
-            else:
-                logger.error(f'XXX Replica `{self.replica.state.self_id}`: {packet}')
+            logger.error(f'XXX Replica `{self.replica.state.self_id}`: {packet}')
 
 
 class ReplicaSendChannel(Channel):
@@ -70,7 +78,6 @@ class ReplicaSendChannel(Channel):
 
     def send(self, peer: int, payload: Payload):
         self.send_packet(Packet(self.peer_id, peer, str(payload.__class__.__name__), payload))
-
 
     def pre_accept_request(
         self,

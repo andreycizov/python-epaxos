@@ -15,8 +15,9 @@ class ReplicaState:
         quorum_fast: Set[int],
         quorum_full: Set[int],
         live: bool = True,
-        timeout: int = 5,
-        jiffies: int = 33
+        timeout: int = 1,
+        jiffies: int = 33,
+        timeout_range: int = 0
     ):
         self.channel = channel
         self.epoch = epoch
@@ -30,6 +31,7 @@ class ReplicaState:
         self.seconds_per_tick = 1. / self.jiffies
 
         self.packet_counts = defaultdict(int)
+        self.timeout_range = timeout_range
 
     def tick(self):
         self.ticks += 1

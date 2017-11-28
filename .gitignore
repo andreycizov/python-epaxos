@@ -107,3 +107,4 @@ target/
 
 /settings.py
 *\.profile
+*.txt

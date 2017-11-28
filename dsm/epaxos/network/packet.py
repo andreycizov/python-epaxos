@@ -1,7 +1,7 @@
 from typing import List, NamedTuple
 
 from dsm.epaxos.command.state import AbstractCommand
-from dsm.epaxos.instance.state import Ballot, Slot, StateType
+from dsm.epaxos.instance.state import Ballot, Slot, StateType, InstanceState, STATE_TYPES_MAP
 from dsm.epaxos.network.serializer import _deserialize, _serialize
 
 
@@ -45,15 +45,25 @@ class PreAcceptRequest(NamedTuple, Payload):
     deps: List[Slot]
 
 
+class PreAccept(NamedTuple, Payload):
+    slot: Slot
+    ballot: Ballot
+    payload: Payload
+    seq: int
+    deps: List[Slot]
+
+
 class PreAcceptResponseAck(NamedTuple, Payload):
     slot: Slot
     ballot: Ballot
     seq: int
     deps: List[Slot]
+    deps_comm_mask: List[bool]
 
 
 class PreAcceptResponseNack(NamedTuple, Payload):
     slot: Slot
+    reason: str
 
 
 class AcceptRequest(NamedTuple, Payload):
@@ -94,12 +104,23 @@ class PrepareResponseAck(NamedTuple, Payload):
     deps: List[Slot]
     state: StateType
 
+    @property
+    def inst(self) -> InstanceState:
+        if self.state in [StateType.Prepared]:
+            return STATE_TYPES_MAP[self.state](self.slot, self.ballot)
+        else:
+            return STATE_TYPES_MAP[self.state](self.slot, self.ballot, self.command, self.seq, self.deps)
 
-class DivergedResponse(NamedTuple, Payload):
+
+class PrepareResponseAckEmpty(NamedTuple, Payload):
     slot: Slot
 
 
 class PrepareResponseNack(NamedTuple, Payload):
+    slot: Slot
+
+
+class DivergedResponse(NamedTuple, Payload, ):
     slot: Slot
 
 
@@ -119,7 +140,25 @@ PACKETS = [
 
     PrepareRequest,
     PrepareResponseAck,
-    PrepareResponseNack
+    PrepareResponseNack,
+
+    DivergedResponse,
 ]
 
 TYPE_TO_PACKET = {v.__name__: v for v in PACKETS}
+
+SLOTTED = [
+    PreAcceptRequest,
+    PreAcceptResponseAck,
+    PreAcceptResponseNack,
+
+    AcceptRequest,
+    AcceptResponseAck,
+    AcceptResponseNack,
+
+    CommitRequest,
+    PrepareRequest,
+    PrepareResponseAck,
+    DivergedResponse,
+    PrepareResponseNack,
+]

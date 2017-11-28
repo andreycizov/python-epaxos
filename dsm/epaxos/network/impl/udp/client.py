@@ -23,7 +23,7 @@ class UDPReplicaClient(ReplicaClient):
             socket.AF_INET,  # Internet
             socket.SOCK_DGRAM
         )
-        # self.socket.settimeout(0)
+        # self.socket.setsockopt(socket.SO_RCVBUF, )
 
         self._replica_id = random.choice(list(self.peer_addr.keys()))
 

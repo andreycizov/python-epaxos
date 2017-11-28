@@ -19,6 +19,15 @@ from dsm.epaxos.timeout.store import TimeoutStore
 logger = logging.getLogger(__name__)
 
 
+def last(iter_obj):
+    r = None
+    for x in iter_obj:
+        r = x
+    if r is None:
+        raise ValueError()
+    return r
+
+
 class InstanceStore:
     def __init__(self, state: ReplicaState, deps_store: AbstractDepsStore, timeout_store: TimeoutStore):
         self.state = state
@@ -28,7 +37,7 @@ class InstanceStore:
         self.instances = {}  # type: Dict[Slot, InstanceState]
 
         self.slot_cut = {}  # type: Dict[int, Slot]
-        self.last_cp = None # type: Optional[Slot]
+        self.last_cp = None  # type: Optional[Slot]
 
         self.executed_cut = {}  # type: Dict[int, Slot]
 
@@ -39,7 +48,11 @@ class InstanceStore:
 
         self.commit_expected = defaultdict(set)  # type: Dict[Slot, Set[Slot]]
 
+        self.committed = dict()  # type: Dict[bool]
+
         self.client_rep = dict()
+
+        self.file_log = open(f'./state_log-{self.state.replica_id}.txt', 'w+')
 
     def __contains__(self, item: Slot):
         return item in self.instances
@@ -47,65 +60,76 @@ class InstanceStore:
     def __setitem__(self, slot: Slot, new_inst: InstanceState):
         inst = self[slot]
 
-        assert new_inst.type >= inst.type and new_inst.ballot >= inst.ballot, repr((new_inst, inst))
+        # logger.info(repr((new_inst, inst)))
+        # assert new_inst.ballot >= inst.ballot, repr((new_inst, inst))
+        # assert ((inst.type >= StateType.Accepted and new_inst.type > StateType.Accepted) or (inst.type <= StateType.Accepted and new_inst.type <= StateType.Accepted)
+        #         or (inst.type == StateType.PreAccepted and new_inst.type == StateType.Committed)
+        #         ), repr((inst, new_inst))
 
-        self.instances[slot] = new_inst
+        if inst.type == StateType.Committed and new_inst.type < StateType.Committed:
+            assert False, repr((inst, new_inst))
 
         self.deps_store.update(slot, inst, new_inst)
 
+        self.file_log.write(f'1\t{inst.slot}\t{inst.type.name}\t{new_inst.type.name}\n')
+        self.file_log.flush()
+
+        if isinstance(new_inst, PostPreparedState):
+            for x in new_inst.deps:
+                if self[x].type == StateType.Prepared:
+                    self.timeout_store.update(slot, None, self[x])
+
+        if inst.type != new_inst.type:
+            new_inst = new_inst  # type: PostPreparedState
+            if new_inst.type == StateType.Committed:
+                try:
+
+                    self.set_committed(slot)
+                except AssertionError:
+                    print(self.committed)
+                    logger.exception(f'{inst} {new_inst}')
+                    raise
+
+        self.instances[slot] = new_inst
+
         # todo: so every new update of the instance sets a new timeout
         self.timeout_store.update(slot, inst, new_inst)
+
+    def set_committed(self, slot: Slot):
+        assert not self.is_committed(slot), self._repr(slot)
+        self.file_log.write(f'2\t{slot}\n')
+        self.file_log.flush()
+        self.committed[slot] = True
+        self.check_waited_for(slot)
+        self.append_to_execute(slot)
+
+    def append_to_execute(self, slot):
+        # assert slot not in self.execute_pending
+        self.execute_pending.append(slot)
 
     def __getitem__(self, slot: Slot) -> InstanceState:
         if slot not in self:
             self.instances[slot] = PreparedState(slot, slot.ballot_initial(self.state.epoch))
         return self.instances[slot]
 
+    def next_ballot(self, slot: Slot):
+        inst = self[slot]
+
+        ballot = Ballot(self.state.epoch, inst.ballot.b + 1, self.state.replica_id)
+
+        return ballot
+
     def increase_ballot(self, slot: Slot, ballot: Optional[Ballot] = None):
         inst = copy(self[slot])
 
         if ballot is None:
-            ballot = Ballot(self.state.epoch, inst.ballot.b + 1, self.state.replica_id)
+            ballot = self.next_ballot(slot)
 
         assert inst.ballot < ballot
 
         inst.ballot = ballot
 
         self[slot] = inst
-
-    def prepare(self, slot: Slot):
-        assert slot not in self
-        return self[slot]
-
-    def pre_accept(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int = 0, deps: List[Slot] = list()):
-        assert StateType.PreAccepted >= self[slot].type and ballot >= self[slot].ballot, (
-            (slot, ballot, command, seq, deps), self[slot])
-
-        local_deps = self.deps_store.query(slot, command)
-
-        slot_seq = max((self[x].seq for x in local_deps), default=0) + 1
-        slot_seq = max([seq, slot_seq])
-
-        remote_deps = sorted(set(local_deps + deps))
-
-        slot_inst = PreAcceptedState(slot, ballot, command, slot_seq, remote_deps)
-
-        self[slot] = slot_inst
-
-        return slot_inst
-
-    def _post_pre_accept(self, cls, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int, deps: List[Slot]):
-        assert cls.type >= self[slot].type and ballot >= self[slot].ballot, (
-            (slot, ballot, command, seq, deps), self[slot])
-
-        new_inst = cls(slot, ballot, command, seq, deps)
-
-        self[slot] = new_inst
-
-        return new_inst
-
-    def accept(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int, deps: List[Slot]) -> AcceptedState:
-        return self._post_pre_accept(AcceptedState, slot, ballot, command, seq, deps)
 
     def _build_deps_graph(self, slot: Slot) -> Dict[Slot, Optional[List[Slot]]]:
         dep_graph = {}  # type: Dict[Slot, List[Slot]]
@@ -133,26 +157,27 @@ class InstanceStore:
 
         return reduce(lambda a, b: a + b, [sorted(x, key=lambda x: self[x].seq) for x in exec_order], [])
 
-    def commit(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int,
-               deps: List[Slot]) -> CommittedState:
-        if self[slot].type < StateType.Committed:
-            self.check_waited_for(slot)
-            self.execute_pending.append(slot)
-
-        return self._post_pre_accept(CommittedState, slot, ballot, command, seq, deps)
-
     def check_waited_for(self, slot: Slot):
-        if slot in self.commit_expected:
-            self.execute_pending.extend(self.commit_expected[slot])
-            del self.commit_expected[slot]
+        if slot not in self.commit_expected:
+            return
+
+        expected = list(self.commit_expected.pop(slot))
+
+        for x in expected:
+            # assert self.is_committed(x), ''
+            # assert not self.is_executed(x), ''
+            # assert not x in self.execute_pending, self._repr(slot) + ' ' + repr((x, self.execute_pending))
+            self.append_to_execute(x)
 
     def is_executed(self, slot: Slot):
-        if slot not in self.executed:
-            return False
-        else:
-            return self.executed[slot]
+        return self.executed.get(slot, False)
+
+    def is_committed(self, slot: Slot):
+        return self.committed.get(slot, False)
 
     def set_executed(self, slot: Slot):
+        assert self.executed.get(slot, False) is False, self[slot]
+
         self.executed[slot] = True
 
         self.update_executed_cut(slot.replica_id)
@@ -176,20 +201,25 @@ class InstanceStore:
         else:
             return False
 
+    def _repr(self, slot: Slot):
+        return repr((self[slot], self.committed.get(slot), self.executed.get(slot), self.executed_cut.get(slot.replica_id)))
+
     def execute(self, slot: Slot):
         if self.is_executed(slot):
             return
 
-        assert self[slot].type == StateType.Committed
+        # assert not slot in self.execute_pending, self._repr(slot)
+        assert not self.is_executed(slot), self._repr(slot)
+        assert self.is_committed(slot), self._repr(slot)
 
-        slots_to_wait = [dep_slot for dep_slot in self[slot].deps if self[dep_slot].type < StateType.Committed]
+        slots_to_wait = [dep_slot for dep_slot in self[slot].deps if not self.is_committed(dep_slot)]
 
         if self.should_wait(slot, slots_to_wait):
             return
 
         graph = self._build_deps_graph(slot)
 
-        slots_to_wait = [x for x in graph.keys() if self[x].type < StateType.Committed]
+        slots_to_wait = [x for x in graph.keys() if not self.is_committed(x)]
 
         if self.should_wait(slot, slots_to_wait):
             return
@@ -204,16 +234,10 @@ class InstanceStore:
         return order
 
     def execute_all_pending(self):
-        def last(iter_obj):
-            r = None
-            for x in iter_obj:
-                r = x
-            if r is None:
-                raise ValueError()
-            return r
 
         from itertools import groupby
         while len(self.execute_pending):
+            # todo: the command is executed,
             cmds = self.execute(self.execute_pending.popleft())  # type: List[Slot]
 
             if cmds:
@@ -223,13 +247,15 @@ class InstanceStore:
 
                     if act.command.ident == 0 and prev_act:
 
-                        cut = {k: last(v) for k, v in groupby(act.deps, key=lambda x: x.replica_id)}
+                        cut = {k: last(v) for k, v in groupby(sorted(prev_act.deps), key=lambda x: x.replica_id)}
                         for k, v in cut.items():
-                            zz = [isinstance(x, CommittedState) for k2, x in self.instances.items() if k2 < v and k2.replica_id == v.replica_id]
+                            zz = [isinstance(x, CommittedState) for k2, x in self.instances.items() if
+                                  k2 < v and k2.replica_id == v.replica_id]
                             try:
                                 assert all(zz)
                             except:
-                                print(k, prev_act, [x for k2, x in self.instances.items() if k2 < v and not isinstance(x, CommittedState)])
+                                print(k, prev_act, [x for k2, x in self.instances.items() if
+                                                    k2 < v and not isinstance(x, CommittedState)])
                         self.slot_cut = {**self.slot_cut, **cut}
 
                         print('CP at', self.slot_cut)

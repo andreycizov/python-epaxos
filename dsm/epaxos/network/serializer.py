@@ -5,14 +5,14 @@ from functools import lru_cache
 
 import bson
 
+ATOMS = (int, str, bool)
+
 
 @lru_cache(maxsize=128)
 def _generate_type_serializer(t):
     if issubclass(t, Enum):
         return lambda val: val.name
-    elif issubclass(t, int):
-        return lambda val: val
-    elif issubclass(t, str):
+    elif issubclass(t, ATOMS):
         return lambda val: val
     elif issubclass(t, typing.List):
         assert hasattr(t, '__args__')
@@ -21,6 +21,8 @@ def _generate_type_serializer(t):
     elif hasattr(t, 'serialize'):
         return t.serialize
     elif hasattr(t, '_fields') and hasattr(t, '_field_types'):
+        # NamedTuple meta
+
         fields = [f for f, _ in t._field_types.items()]
         serializers = {f: _generate_type_serializer(t) for f, t in t._field_types.items()}
         return lambda val: {
@@ -32,9 +34,7 @@ def _generate_type_serializer(t):
 
 @lru_cache(maxsize=128)
 def _generate_type_deserializer(t):
-    if t == int:
-        return lambda val: val
-    elif t == str:
+    if t in ATOMS:
         return lambda val: val
     elif issubclass(t, typing.List):
         assert hasattr(t, '__args__')
@@ -45,6 +45,8 @@ def _generate_type_deserializer(t):
     elif hasattr(t, 'deserialize'):
         return t.deserialize
     elif hasattr(t, '_field_types'):
+        # NamedTuple meta
+
         fields = [f for f, _ in t._field_types.items()]
         deserializers = {f: _generate_type_deserializer(t) for f, t in t._field_types.items()}
         return lambda val: t(**{
