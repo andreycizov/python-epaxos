@@ -1,52 +1,9 @@
 from copy import copy
-from typing import List, NamedTuple, Any
-
 from enum import IntEnum
+from typing import List
 
 from dsm.epaxos.command.state import Command
-
-
-class Slot(NamedTuple):
-    replica_id: int
-    instance_id: int
-
-    def ballot_initial(self, epoch):
-        return Ballot(epoch, 0, self.replica_id)
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.replica_id},{self.instance_id})'
-
-    @classmethod
-    def serialize(cls, obj: 'Slot'):
-        return [obj.replica_id, obj.instance_id]
-
-    @classmethod
-    def deserialize(cls, json):
-        return cls(*json)
-
-
-class Ballot(NamedTuple):
-    epoch: int
-    b: int
-    replica_id: int
-
-    def next(self, replica_id=None):
-        if replica_id is None:
-            replica_id = self.replica_id
-        return Ballot(self.epoch, self.b + 1, replica_id)
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.epoch},{self.b},{self.replica_id})'
-
-    @classmethod
-    def serialize(cls, obj: 'Ballot'):
-        return [obj.epoch, obj.b, obj.replica_id]
-
-    @classmethod
-    def deserialize(cls, json):
-        return cls(*json)
-
-
+from dsm.epaxos.instance.new_state import Ballot, Slot
 
 
 class StateType(IntEnum):

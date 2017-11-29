@@ -4,7 +4,8 @@ import logging
 
 import gevent
 
-from dsm.epaxos.instance.state import Slot, Ballot, StateType, CommittedState, PostPreparedState
+from dsm.epaxos.instance.state import StateType, CommittedState, PostPreparedState
+from dsm.epaxos.instance.new_state import Slot, Ballot
 from dsm.epaxos.instance.store import InstanceStore
 from dsm.epaxos.network.packet import Payload, SLOTTED, DivergedResponse
 from dsm.epaxos.network.peer import AcceptorInterface, DirectInterface

@@ -1,7 +1,8 @@
 from typing import List
 
 from dsm.epaxos.command.state import Command
-from dsm.epaxos.instance.state import InstanceState, Slot
+from dsm.epaxos.instance.state import InstanceState
+from dsm.epaxos.instance.new_state import Slot
 
 
 class AbstractDepsStore:

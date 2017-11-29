@@ -2,7 +2,8 @@ import logging
 from typing import Dict, Generator, Union
 
 from dsm.epaxos.command.state import Command
-from dsm.epaxos.instance.state import Slot, PostPreparedState, PreAcceptedState
+from dsm.epaxos.instance.state import PostPreparedState, PreAcceptedState
+from dsm.epaxos.instance.new_state import Slot
 from dsm.epaxos.instance.store import InstanceStore
 from dsm.epaxos.network.packet import Payload, ClientRequest, SLOTTED, DivergedResponse
 from dsm.epaxos.network.peer import DirectInterface

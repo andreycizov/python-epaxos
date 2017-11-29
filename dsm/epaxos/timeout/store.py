@@ -5,7 +5,8 @@ from typing import NamedTuple, List, Dict, Optional
 
 import logging
 
-from dsm.epaxos.instance.state import Slot, InstanceState, StateType, Ballot
+from dsm.epaxos.instance.state import InstanceState, StateType
+from dsm.epaxos.instance.new_state import Slot, Ballot
 from dsm.epaxos.replica.state import ReplicaState
 
 logger = logging.getLogger(__name__)

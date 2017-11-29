@@ -3,7 +3,8 @@ from typing import NamedTuple, List, Dict, Optional
 
 from dsm.epaxos.command.deps.store import AbstractDepsStore
 from dsm.epaxos.command.state import Command, Checkpoint, Mutator
-from dsm.epaxos.instance.state import Slot, InstanceState, PostPreparedState
+from dsm.epaxos.instance.state import InstanceState, PostPreparedState
+from dsm.epaxos.instance.new_state import Slot
 from dsm.epaxos.instance.store import last
 
 

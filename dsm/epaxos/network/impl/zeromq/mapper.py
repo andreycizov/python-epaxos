@@ -6,7 +6,7 @@ import zmq
 # from dsm.epaxos.network.impl.zeromq import server, client
 from dsm.epaxos.network.impl.generic.mapper import ReplicaReceiveChannel, ReplicaSendChannel
 from dsm.epaxos.network.packet import Packet
-from dsm.epaxos.network.serializer import deserialize_json, serialize_json
+from dsm.serializer import deserialize_json, serialize_json
 
 logger = logging.getLogger(__name__)
 

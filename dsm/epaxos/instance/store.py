@@ -11,8 +11,9 @@ import logging
 from tarjan import tarjan
 
 from dsm.epaxos.command.deps.store import AbstractDepsStore
-from dsm.epaxos.instance.state import Slot, Ballot, StateType, PreparedState, PostPreparedState, \
+from dsm.epaxos.instance.state import StateType, PreparedState, PostPreparedState, \
     PreAcceptedState, AcceptedState, CommittedState, InstanceState
+from dsm.epaxos.instance.new_state import Slot, Ballot
 from dsm.epaxos.network import packet
 from dsm.epaxos.replica.state import ReplicaState
 from dsm.epaxos.timeout.store import TimeoutStore

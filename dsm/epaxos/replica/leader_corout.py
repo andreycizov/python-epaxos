@@ -6,8 +6,8 @@ from itertools import groupby
 from typing import NamedTuple, List, ClassVar, TypeVar, Union, Optional, Tuple, Any
 
 from dsm.epaxos.command.state import Command
-from dsm.epaxos.instance.state import PostPreparedState, StateType, InstanceState, PreparedState, Slot, Ballot, \
-    AcceptedState, CommittedState, PreAcceptedState
+from dsm.epaxos.instance.state import PostPreparedState, StateType, InstanceState, PreparedState, AcceptedState, CommittedState, PreAcceptedState
+from dsm.epaxos.instance.new_state import Slot, Ballot
 from dsm.epaxos.network import packet
 
 logger = logging.getLogger(__name__)
@@ -125,13 +125,18 @@ def leader_explicit_prepare(q: Quorum, slot: Slot, reason=None):
     replies = []  # type: List[Reply]
 
     while len(replies) < q.slow_size:
-        peer, (ack, nack) = yield Receive.any(
+        x = yield Receive.any(
             packet.PrepareResponseAck,
             packet.PreAcceptResponseNack,
         )  # type: Tuple[int, Tuple[Optional[packet.PrepareResponseAck], Optional[packet.PrepareResponseNack]]]
 
+        peer, (ack, nack) = x
+
         if ack:
             ack = ack  # type: packet.PrepareResponseAck
+
+            # if ack.ballot != ballot:
+            #     continue
 
             if ack.state == StateType.Committed:
                 new_inst = ack.inst.with_ballot(ballot)
@@ -139,14 +144,13 @@ def leader_explicit_prepare(q: Quorum, slot: Slot, reason=None):
                 yield from leader_commit(q, slot)
                 return
 
-            # if ack.ballot < ballot:
-            #    delayed reply
-            #    # continue
-
             # todo: should replies from non-current ballots be ignored?
             replies.append(Reply(peer, ack))
 
         if nack:
+            if nack.ballot != ballot:
+                continue
+
             # logger.debug(f'{q.replica_id} explicit prepare NACK {inst} {ballot}')
             raise ExplicitPrepare('explicit:NACK')
 
@@ -225,10 +229,12 @@ def leader_pre_accept(q: Quorum, slot: Slot, allow_fast: True):
 
     replies = []
     while len(replies) + 1 < q.slow_size:
-        _, (ack, nack) = yield Receive.any(
+        x = yield Receive.any(
             packet.PreAcceptResponseAck,
             packet.PreAcceptResponseNack,
         )  # type: Tuple[Optional[packet.PreAcceptResponseAck], Optional[packet.PreAcceptResponseNack]]
+
+        _, (ack, nack) = x
 
         if ack:
             if ack.ballot != inst.ballot:
@@ -267,10 +273,12 @@ def leader_accept(q: Quorum, slot: Slot):
     replies = []
 
     while len(replies) + 1 < q.slow_size:
-        _, (ack, nack) = yield Receive.any(
+        x = yield Receive.any(
             packet.AcceptResponseAck,
             packet.AcceptResponseNack,
         )  # type: Tuple[Optional[packet.AcceptResponseAck], Optional[packet.AcceptResponseNack]]
+
+        _, (ack, nack) = x
 
         if ack:
             if ack.ballot != inst.ballot:

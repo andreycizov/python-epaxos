@@ -8,6 +8,12 @@ import bson
 
 ATOMS = (int, str, bool)
 
+T = typing.TypeVar('T')
+D = typing.TypeVar('D')
+T_ser_actual = typing.Callable[[T], typing.Dict[str, typing.Any]]
+T_ser = typing.Callable[[D], T_ser_actual]
+T_des = typing.Callable[[typing.Dict[str, typing.Any]], typing.Any]
+
 
 @lru_cache(maxsize=1024)
 def _generate_type_serializer(t):
@@ -42,7 +48,7 @@ def _generate_type_serializer(t):
         serializer = _generate_type_serializer(t.__args__[0])
         return lambda val: [serializer(x) for x in val]
     elif hasattr(t, 'serializer'):
-        return t.serializer(_serialize)
+        return t.serializer(_generate_type_serializer)
     elif hasattr(t, '_fields') and hasattr(t, '_field_types'):
         # NamedTuple meta
 
@@ -92,7 +98,7 @@ def _generate_type_deserializer(t):
     elif issubclass(t, Enum):
         return lambda val: t[val]
     elif hasattr(t, 'deserializer'):
-        return t.deserializer(_deserialize)
+        return t.deserializer(_generate_type_deserializer)
     elif hasattr(t, '_field_types'):
         # NamedTuple meta
 

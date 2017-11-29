@@ -1,7 +1,9 @@
 from typing import List, NamedTuple, Optional
 
 from dsm.epaxos.command.state import Command
-from dsm.epaxos.instance.state import Ballot, Slot, StateType, InstanceState, STATE_TYPES_MAP
+from dsm.epaxos.instance.state import InstanceState, STATE_TYPES_MAP, StateType
+from dsm.epaxos.instance.new_state import Slot, Ballot
+from dsm.serializer import T_des, T_ser
 
 
 class Payload:
@@ -15,20 +17,23 @@ class Packet(NamedTuple):
     payload: Payload
 
     @classmethod
-    def serializer(cls, sub_ser):
+    def serializer(cls, sub_ser: T_ser):
         def ser(obj: 'Packet'):
-            return {
-                'o': obj.origin,
-                'd': obj.destination,
-                't': obj.type,
-                'p': sub_ser(obj.payload)
-            }
+            return [
+                obj.origin,
+                obj.destination,
+                obj.type,
+                sub_ser(obj.payload.__class__)(obj.payload)
+            ]
+
         return ser
 
     @classmethod
-    def deserializer(cls, sub_deser):
+    def deserializer(cls, sub_deser: T_des):
         def deser(json):
-            return cls(json['o'], json['d'], json['t'], sub_deser(TYPE_TO_PACKET[json['t']], json['p']))
+            o, d, t, p = json
+            return cls(o, d, t, sub_deser(TYPE_TO_PACKET[t])(p))
+
         return deser
 
 
@@ -48,14 +53,6 @@ class PreAcceptRequest(NamedTuple, Payload):
     deps: List[Slot]
 
 
-class PreAccept(NamedTuple, Payload):
-    slot: Slot
-    ballot: Ballot
-    payload: Payload
-    seq: int
-    deps: List[Slot]
-
-
 class PreAcceptResponseAck(NamedTuple, Payload):
     slot: Slot
     ballot: Ballot
@@ -66,7 +63,29 @@ class PreAcceptResponseAck(NamedTuple, Payload):
 
 class PreAcceptResponseNack(NamedTuple, Payload):
     slot: Slot
+    ballot: Ballot
     reason: str
+
+
+class TentativePreAcceptRequest(NamedTuple, Payload):
+    slot: Slot
+    ballot: Ballot
+    command: Optional[Command]
+    seq: int
+    deps: List[Slot]
+
+
+class TentativePreAcceptResponseAck(NamedTuple, Payload):
+    slot: Slot
+    ballot: Ballot
+
+
+class TentativePreAcceptResponseNack(NamedTuple, Payload):
+    slot: Slot
+    ballot: Ballot
+    conflict: Slot
+    replica_id: int
+    status: StateType
 
 
 class AcceptRequest(NamedTuple, Payload):
@@ -84,6 +103,7 @@ class AcceptResponseAck(NamedTuple, Payload):
 
 class AcceptResponseNack(NamedTuple, Payload):
     slot: Slot
+    ballot: Ballot
 
 
 class CommitRequest(NamedTuple, Payload):
@@ -117,10 +137,12 @@ class PrepareResponseAck(NamedTuple, Payload):
 
 class PrepareResponseAckEmpty(NamedTuple, Payload):
     slot: Slot
+    ballot: Ballot
 
 
 class PrepareResponseNack(NamedTuple, Payload):
     slot: Slot
+    ballot: Ballot
 
 
 class DivergedResponse(NamedTuple, Payload, ):

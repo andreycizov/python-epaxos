@@ -1,8 +1,48 @@
 from enum import IntEnum
-from typing import NamedTuple, List
+from typing import NamedTuple, List, Optional
 
 from dsm.epaxos.command.state import Command
-from dsm.epaxos.instance.state import Slot
+
+
+class Slot(NamedTuple):
+    replica_id: int
+    instance_id: int
+
+    def ballot_initial(self, epoch=0):
+        return Ballot(epoch, 0, self.replica_id)
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.replica_id},{self.instance_id})'
+
+    @classmethod
+    def serializer(cls, sub_ser):
+        return lambda obj: [obj.replica_id, obj.instance_id]
+
+    @classmethod
+    def deserializer(cls, sub_des):
+        return lambda json: cls(*json)
+
+
+class Ballot(NamedTuple):
+    epoch: int
+    b: int
+    replica_id: int
+
+    def next(self, replica_id=None):
+        if replica_id is None:
+            replica_id = self.replica_id
+        return Ballot(self.epoch, self.b + 1, replica_id)
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.epoch},{self.b},{self.replica_id})'
+
+    @classmethod
+    def serializer(cls, sub_ser):
+        return lambda obj: [obj.epoch, obj.b, obj.replica_id]
+
+    @classmethod
+    def deserializer(cls, sub_des):
+        return lambda json: cls(*json)
 
 
 class Stage(IntEnum):
@@ -13,11 +53,11 @@ class Stage(IntEnum):
     Executed = 5
 
 
-class Status(NamedTuple):
-    command: Command
+class State(NamedTuple):
     stage: Stage
+    command: Optional[Command]
     seq: int
     deps: List[Slot]
 
-
-# updateAttributes(slot, status)
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.stage},{self.command},{self.seq},{self.deps})'

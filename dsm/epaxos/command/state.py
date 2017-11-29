@@ -1,5 +1,5 @@
 import uuid
-from typing import NamedTuple, Any, Union
+from typing import NamedTuple, Any, Union, List
 
 
 class Checkpoint(NamedTuple):
@@ -8,7 +8,7 @@ class Checkpoint(NamedTuple):
 
 class Mutator(NamedTuple):
     op: str
-    key: int
+    keys: List[int]
 
 
 CLASSES = [

@@ -4,7 +4,8 @@ from typing import List
 import logging
 
 from dsm.epaxos.command.state import Command
-from dsm.epaxos.instance.state import Ballot, Slot, StateType
+from dsm.epaxos.instance.state import StateType
+from dsm.epaxos.instance.new_state import Slot, Ballot
 from dsm.epaxos.network.packet import Packet, ClientRequest, PreAcceptRequest, PreAcceptResponseAck, \
     PreAcceptResponseNack, AcceptRequest, AcceptResponseAck, AcceptResponseNack, CommitRequest, PrepareRequest, \
     PrepareResponseAck, PrepareResponseNack, ClientResponse, Payload, DivergedResponse

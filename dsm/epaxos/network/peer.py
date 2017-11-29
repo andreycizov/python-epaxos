@@ -1,7 +1,8 @@
 from typing import List
 
 from dsm.epaxos.command.state import Command
-from dsm.epaxos.instance.state import Slot, Ballot, StateType
+from dsm.epaxos.instance.state import StateType
+from dsm.epaxos.instance.new_state import Slot, Ballot
 from dsm.epaxos.network.packet import Payload
 
 
