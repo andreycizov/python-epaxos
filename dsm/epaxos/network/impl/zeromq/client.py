@@ -2,7 +2,7 @@ import random
 
 import zmq
 
-from dsm.epaxos.command.state import AbstractCommand
+from dsm.epaxos.command.state import Command
 from dsm.epaxos.network.impl.generic.client import ReplicaClient
 from dsm.epaxos.network.impl.zeromq.mapper import ZMQClientSendChannel, deserialize
 from dsm.epaxos.network.peer import Channel
@@ -55,7 +55,7 @@ class ZMQReplicaClient(ReplicaClient):
         poll_result = dict(self.poller.poll(max_wait * 1000.))
         return self.socket in poll_result
 
-    def send(self, command: AbstractCommand):
+    def send(self, command: Command):
         self.channel.client_request(self.leader_id, command)
 
     def recv(self):

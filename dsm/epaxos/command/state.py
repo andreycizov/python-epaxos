@@ -1,29 +1,34 @@
-class AbstractCommand:
-    def __init__(self, ident):
-        self.ident = ident
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.ident})'
-
-    def tuple(self):
-        return self.ident,
-
-    def __lt__(self, other):
-        return self.tuple() < other.tuple()
-
-    @classmethod
-    def deserialize(cls, json):
-        return cls(json['i'])
-
-    @classmethod
-    def serialize(cls, obj):
-        return {'i': obj.ident}
-
-# If an instance has agreed on a command, then it will not be changed by the quorum.
-
-class EmptyCommand(AbstractCommand):
-    def __init__(self):
-        super().__init__(-1)
+import uuid
+from typing import NamedTuple, Any, Union
 
 
-Noop = EmptyCommand()
+class Checkpoint(NamedTuple):
+    charlie: int
+
+
+class Mutator(NamedTuple):
+    op: str
+    key: int
+
+
+CLASSES = [
+    Checkpoint,
+    Mutator
+]
+
+CLASSES_MAP = {k.__name__[:1]: k for k in CLASSES}
+CLASSES_MAP_BACK = {k: k.__name__[:1] for k in CLASSES}
+
+
+class Command(NamedTuple):
+    id: uuid.UUID
+    payload: Union[Checkpoint, Mutator]
+
+    # @classmethod
+    # def deserializer(cls, sub_des):
+    #     return lambda json: cls(sub_des(uuid.UUID, json['i']), sub_des(CLASSES_MAP[json['x']], json['p']))
+    #
+    # @classmethod
+    # def serializer(cls, sub_ser):
+    #     return lambda obj: {'i': sub_ser(obj.id), 'x': CLASSES_MAP_BACK[obj.payload.__class__],
+    #                         'p': sub_ser(obj.payload)}

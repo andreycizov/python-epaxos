@@ -1,10 +1,11 @@
 import logging
+from collections import defaultdict
 from copy import copy
 from functools import reduce
 from itertools import groupby
 from typing import NamedTuple, List, ClassVar, TypeVar, Union, Optional, Tuple, Any
 
-from dsm.epaxos.command.state import AbstractCommand, Noop
+from dsm.epaxos.command.state import Command
 from dsm.epaxos.instance.state import PostPreparedState, StateType, InstanceState, PreparedState, Slot, Ballot, \
     AcceptedState, CommittedState, PreAcceptedState
 from dsm.epaxos.network import packet
@@ -80,7 +81,8 @@ class LeaderException(Exception):
 
 
 class ExplicitPrepare(LeaderException):
-    pass
+    def __init__(self, reason=None):
+        self.reason = reason
 
 
 def leader_client_request(q: Quorum, slot: Slot, cmd, seq, deps):
@@ -97,12 +99,14 @@ def leader_client_request(q: Quorum, slot: Slot, cmd, seq, deps):
     yield from leader_pre_accept(q, slot, True)
 
 
-def leader_explicit_prepare(q: Quorum, slot: Slot):
+def leader_explicit_prepare(q: Quorum, slot: Slot, reason=None):
     inst = yield Load(slot)  # type: InstanceState
 
-    ballot = inst.ballot.next() if inst else slot.ballot_initial(q.replica_id)
+    ballot = inst.ballot.next(q.replica_id) if inst else slot.ballot_initial(q.replica_id)
 
     inst = inst.with_ballot(ballot)
+
+    # logger.debug(f'{q.replica_id} explicit prepare {inst} {ballot} {reason}')
 
     yield StorePostPrepared(
         slot,
@@ -112,10 +116,16 @@ def leader_explicit_prepare(q: Quorum, slot: Slot):
     for peer in q.peers:
         yield Send(peer, packet.PrepareRequest(slot, ballot))
 
-    replies = []  # type: List[packet.PrepareResponseAck]
+    yield Send(q.replica_id, packet.PrepareRequest(slot, ballot))
 
-    while len(replies) + 1 < q.slow_size:
-        _, (ack, nack) = yield Receive.any(
+    class Reply(NamedTuple):
+        p: int
+        r: packet.PrepareResponseAck
+
+    replies = []  # type: List[Reply]
+
+    while len(replies) < q.slow_size:
+        peer, (ack, nack) = yield Receive.any(
             packet.PrepareResponseAck,
             packet.PreAcceptResponseNack,
         )  # type: Tuple[int, Tuple[Optional[packet.PrepareResponseAck], Optional[packet.PrepareResponseNack]]]
@@ -129,83 +139,81 @@ def leader_explicit_prepare(q: Quorum, slot: Slot):
                 yield from leader_commit(q, slot)
                 return
 
-            assert ack.ballot <= ballot, 'This should never happen'
+            # if ack.ballot < ballot:
+            #    delayed reply
+            #    # continue
 
             # todo: should replies from non-current ballots be ignored?
-            replies.append(ack)
+            replies.append(Reply(peer, ack))
 
         if nack:
-            raise ExplicitPrepare()
+            # logger.debug(f'{q.replica_id} explicit prepare NACK {inst} {ballot}')
+            raise ExplicitPrepare('explicit:NACK')
 
-    inst = yield Load(slot)
+    len_rep = len(replies)
 
-    if isinstance(inst, PostPreparedState):
-        replies.append(packet.PrepareResponseAck(
-            inst.slot,
-            ballot,
-            inst.command,
-            inst.seq,
-            inst.deps,
-            inst.type
-        ))
-    else:
-        replies.append(packet.PrepareResponseAck(
-            slot,
-            ballot,
-            Noop,
-            0,
-            [],
-            StateType.Prepared
-        ))
+    max_ballot = max(x.r.ballot for x in replies)
+    replies = [x for x in replies if x.r.ballot == max_ballot]
+    max_state = max(x.r.state for x in replies)
 
-    ballot = max(x.ballot for x in replies)
-    replies = [x for x in replies if x.ballot == ballot]
-    max_state = max(x.state for x in replies)
+    replies = [x for x in replies if x.r.state == max_state]
+
+    len_rep_fil = len(replies)
+
+    loglog = lambda ni, tag=None: logger.info(f'{q.replica_id} Storing {ni} {len_rep} {len_rep_fil} {ballot} {tag}')
+    loglog = lambda ni, tag=None: None
 
     if max_state == StateType.Committed:
-        reply = [x for x in replies if x.state == max_state][0]  # type: packet.PrepareResponseAck
+        reply = [x.r for x in replies if x.state == max_state][0]  # type: packet.PrepareResponseAck
         new_inst = reply.inst.with_ballot(ballot)
 
         yield StorePostPrepared(slot, new_inst)
+        loglog(new_inst)
         yield from leader_commit(q, slot)
         return
     elif max_state == StateType.Accepted:
-        reply = [x for x in replies if x.state == max_state][0]  # type: packet.PrepareResponseAck
-
-        yield StorePostPrepared(slot, reply.inst.with_ballot(ballot))
+        reply = [x.r for x in replies if x.r.state == max_state][0]  # type: packet.PrepareResponseAck
+        new_inst = reply.inst.with_ballot(ballot)
+        yield StorePostPrepared(slot, new_inst)
+        loglog(new_inst)
         yield from leader_accept(q, slot)
         return
 
-    def key(x: packet.PrepareResponseAck):
-        return x.state, x.command, x.seq, x.deps
+    # def key(x: packet.PrepareResponseAck):
+    #     return x.r.state, x.r.command, x.r.seq, x.r.deps
 
-    identic_groups = sorted(replies, key=key)
-    identic_groups = groupby(identic_groups, key=key)
+    identic_keys = defaultdict(list)
+
+    for r in replies:
+        identic_keys[(r.r.state, r.r.command, r.r.seq, tuple(sorted(r.r.deps)))].append(r)
+
     identic_groups = [
         (x, list(y))
-        for x, y in identic_groups
-    ]  # type: List[Tuple[Tuple[InstanceState, AbstractCommand, int, List[int]], List[packet.PrepareResponseAck]]]
+        for x, y in identic_keys.items()
+    ]  # type: List[Tuple[Tuple[InstanceState, Command, int, List[int]], List[Reply]]]
     identic_groups = [
         y
         for x, y in identic_groups
         if len(y) >= q.slow_size - 1 and
-           all(z.peer != inst.slot.replica_id for z in y and x[0] == StateType.PreAccepted)
+           all(z.p != inst.slot.replica_id for z in y) and x[0] == StateType.PreAccepted
     ]
 
     if len(identic_groups):
-        reply = identic_groups[0][0]
+        reply = identic_groups[0][0].r
         new_inst = reply.inst.with_ballot(ballot)
         yield StorePostPrepared(slot, new_inst)
+        loglog(new_inst, 'identic')
         yield from leader_accept(q, slot)
     elif max_state == StateType.PreAccepted:
-        reply = [x for x in replies if x.state == max_state][0]
+        reply = [x for x in replies if x.r.state == max_state][0].r
         new_inst = reply.inst.with_ballot(ballot)
-        logger.info(f'Storing {new_inst}')
+        loglog(new_inst)
         yield StorePostPrepared(slot, new_inst)
         yield from leader_pre_accept(q, slot, False)
     else:
-        new_inst = PostPreparedState.noop(inst.slot, ballot)
+        new_inst = PreAcceptedState.noop(inst.slot, ballot)
         yield StorePostPrepared(slot, new_inst)
+        loglog(new_inst)
         yield from leader_pre_accept(q, slot, False)
 
 
@@ -223,14 +231,16 @@ def leader_pre_accept(q: Quorum, slot: Slot, allow_fast: True):
         )  # type: Tuple[Optional[packet.PreAcceptResponseAck], Optional[packet.PreAcceptResponseNack]]
 
         if ack:
-            if ack.ballot > inst.ballot:
-                logger.debug(f'Raising do to > {ack} {nack}')
-                raise ExplicitPrepare()
+            if ack.ballot != inst.ballot:
+                # logger.debug(f'{q.replica_id} pre_accept Raising do to > {ack} {nack} {ack} {inst}')
+                # raise ExplicitPrepare('pre_accept:BALLOT')
+                pass
             else:
                 replies.append(ack)
         if nack:
-            logger.debug(f'Raising do to nack {ack} {nack}')
-            raise ExplicitPrepare()
+            # logger.debug(f'{q.replica_id} pre_accept Raising do to nack {ack} {nack} {ack} {inst}')
+            pass
+            # raise ExplicitPrepare('pre_accept:NACK')
 
     if allow_fast and (
             all(x.deps == inst.deps for x in replies) and
@@ -263,13 +273,17 @@ def leader_accept(q: Quorum, slot: Slot):
         )  # type: Tuple[Optional[packet.AcceptResponseAck], Optional[packet.AcceptResponseNack]]
 
         if ack:
-            if ack.ballot > inst.ballot:
-                raise ExplicitPrepare()
+            if ack.ballot != inst.ballot:
+                # logger.debug(f'{q.replica_id} accept Raising do to > {ack} {nack} {ack} {inst}')
+                # raise ExplicitPrepare('accept:BALLOT')
+                pass
             else:
                 replies.append(ack)
 
         if nack:
-            raise ExplicitPrepare()
+            # logger.debug(f'{q.replica_id} accept Raising do to nack {ack} {nack} {ack} {inst}')
+            pass
+            # raise ExplicitPrepare('accept:NACK')
 
     yield StorePostPrepared(slot, inst.promote(StateType.Committed))
     yield from leader_commit(q, slot)

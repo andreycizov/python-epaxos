@@ -1,8 +1,7 @@
-from typing import List, NamedTuple
+from typing import List, NamedTuple, Optional
 
-from dsm.epaxos.command.state import AbstractCommand
+from dsm.epaxos.command.state import Command
 from dsm.epaxos.instance.state import Ballot, Slot, StateType, InstanceState, STATE_TYPES_MAP
-from dsm.epaxos.network.serializer import _deserialize, _serialize
 
 
 class Payload:
@@ -16,31 +15,35 @@ class Packet(NamedTuple):
     payload: Payload
 
     @classmethod
-    def serialize(cls, obj: 'Packet'):
-        return {
-            'o': obj.origin,
-            'd': obj.destination,
-            't': obj.type,
-            'p': _serialize(obj.payload)
-        }
+    def serializer(cls, sub_ser):
+        def ser(obj: 'Packet'):
+            return {
+                'o': obj.origin,
+                'd': obj.destination,
+                't': obj.type,
+                'p': sub_ser(obj.payload)
+            }
+        return ser
 
     @classmethod
-    def deserialize(cls, json):
-        return cls(json['o'], json['d'], json['t'], _deserialize(TYPE_TO_PACKET[json['t']], json['p']))
+    def deserializer(cls, sub_deser):
+        def deser(json):
+            return cls(json['o'], json['d'], json['t'], sub_deser(TYPE_TO_PACKET[json['t']], json['p']))
+        return deser
 
 
 class ClientRequest(NamedTuple, Payload):
-    command: AbstractCommand
+    command: Command
 
 
 class ClientResponse(NamedTuple, Payload):
-    command: AbstractCommand
+    command: Optional[Command]
 
 
 class PreAcceptRequest(NamedTuple, Payload):
     slot: Slot
     ballot: Ballot
-    command: AbstractCommand
+    command: Optional[Command]
     seq: int
     deps: List[Slot]
 
@@ -69,7 +72,7 @@ class PreAcceptResponseNack(NamedTuple, Payload):
 class AcceptRequest(NamedTuple, Payload):
     slot: Slot
     ballot: Ballot
-    command: AbstractCommand
+    command: Optional[Command]
     seq: int
     deps: List[Slot]
 
@@ -86,7 +89,7 @@ class AcceptResponseNack(NamedTuple, Payload):
 class CommitRequest(NamedTuple, Payload):
     slot: Slot
     ballot: Ballot
-    command: AbstractCommand
+    command: Optional[Command]
     seq: int
     deps: List[Slot]
 
@@ -99,7 +102,7 @@ class PrepareRequest(NamedTuple, Payload):
 class PrepareResponseAck(NamedTuple, Payload):
     slot: Slot
     ballot: Ballot
-    command: AbstractCommand
+    command: Optional[Command]
     seq: int
     deps: List[Slot]
     state: StateType

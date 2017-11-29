@@ -29,10 +29,13 @@ class TimeoutStore:
         return datetime.now()
 
     def update(self, slot: Slot, old_inst: InstanceState, new_inst: InstanceState):
-        last_state = TimeoutStoreState(self.state.ticks + self.state.timeout + random.randint(0, self.state.timeout_range), slot, new_inst.ballot, new_inst.type)
-
         if new_inst.type < StateType.Committed:
-            self.last_states[slot] = last_state
+            self.last_states[slot] = TimeoutStoreState(
+                self.state.ticks + self.state.timeout + random.randint(0, self.state.timeout_range),
+                slot,
+                new_inst.ballot,
+                new_inst.type
+            )
         elif slot in self.last_states:
             del self.last_states[slot]
 
@@ -40,7 +43,7 @@ class TimeoutStore:
         now = self.state.ticks
 
         if len(self.last_states.items()):
-            return max(min((now - x.time) * self.state.seconds_per_tick for x in self.last_states.values()), 0)
+            return max(min((x.time - now) * self.state.seconds_per_tick for x in self.last_states.values()), 0)
         else:
             return None
 

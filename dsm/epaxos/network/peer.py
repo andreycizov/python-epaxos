@@ -1,6 +1,6 @@
 from typing import List
 
-from dsm.epaxos.command.state import AbstractCommand
+from dsm.epaxos.command.state import Command
 from dsm.epaxos.instance.state import Slot, Ballot, StateType
 from dsm.epaxos.network.packet import Payload
 
@@ -10,7 +10,7 @@ class AcceptorInterface:
         self,
         peer: int,
         slot: Slot, ballot: Ballot,
-        command: AbstractCommand, seq: int, deps: List[Slot]
+        command: Command, seq: int, deps: List[Slot]
     ):
         raise NotImplementedError()
 
@@ -18,7 +18,7 @@ class AcceptorInterface:
         self,
         peer: int,
         slot: Slot, ballot: Ballot,
-        command: AbstractCommand, seq: int, deps: List[Slot]
+        command: Command, seq: int, deps: List[Slot]
     ):
         raise NotImplementedError()
 
@@ -26,7 +26,7 @@ class AcceptorInterface:
         self,
         peer: int,
         slot: Slot, ballot: Ballot,
-        command: AbstractCommand, seq: int, deps: List[Slot]
+        command: Command, seq: int, deps: List[Slot]
     ):
         raise NotImplementedError()
 
@@ -42,7 +42,7 @@ class LeaderInterface:
     def client_request(
         self,
         client_peer: int,
-        command: AbstractCommand
+        command: Command
     ):
         raise NotImplementedError()
 
@@ -79,7 +79,7 @@ class LeaderInterface:
         self,
         peer: int,
         slot: Slot, ballot: Ballot,
-        command: AbstractCommand, seq: int, deps: List[Slot],
+        command: Command, seq: int, deps: List[Slot],
         state: StateType
     ):
         raise NotImplementedError()
@@ -105,7 +105,7 @@ class ClientInterface:
     def client_response(
         self,
         client_peer: int,
-        command: AbstractCommand
+        command: Command
     ):
         raise NotImplementedError()
 

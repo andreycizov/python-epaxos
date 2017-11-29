@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Set
+from typing import Set, List
 
 from collections import defaultdict
 
@@ -12,12 +12,12 @@ class ReplicaState:
         channel: Channel,
         epoch: int,
         replica_id: int,
-        quorum_fast: Set[int],
-        quorum_full: Set[int],
+        quorum_fast: List[int],
+        quorum_full: List[int],
         live: bool = True,
         timeout: int = 1,
         jiffies: int = 33,
-        timeout_range: int = 0
+        timeout_range: int = 3
     ):
         self.channel = channel
         self.epoch = epoch
@@ -32,6 +32,11 @@ class ReplicaState:
 
         self.packet_counts = defaultdict(int)
         self.timeout_range = timeout_range
+
+        self.total_sleep = 0
+        self.total_exec = 0
+        self.total_timeouts = 0
+        self.total_recv = 0
 
     def tick(self):
         self.ticks += 1

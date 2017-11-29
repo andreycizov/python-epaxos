@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict
 
-from dsm.epaxos.command.state import AbstractCommand
+from dsm.epaxos.command.state import Command
 from dsm.epaxos.network.impl.generic.server import ReplicaAddress, logger
 from dsm.epaxos.network.peer import Channel
 
@@ -31,32 +31,42 @@ class ReplicaClient:
     def poll(self, max_wait) -> bool:
         raise NotImplementedError()
 
-    def send(self, command: AbstractCommand):
+    def send(self, command: Command):
         raise NotImplementedError()
 
     def recv(self):
         raise NotImplementedError()
 
-    def request(self, command: AbstractCommand, timeout=0.5):
+    def request(self, command: Command, timeout=0.5, timeout_resend=0.05, retries=5):
         assert self.leader_id is not None
-
-        self.send(command)
 
         start = datetime.now()
 
         while True:
-            poll_result = self.poll(timeout)
+            total_to_wait = retries
 
-            if poll_result:
-                rtn = self.recv()
-                # logger.info(f'Client `{self.peer_id}` -> {self.replica_id} Send={command} Recv={rtn.payload}')
+            poll_result = None
 
-                end = datetime.now()
-                latency = (end - start).total_seconds()
-                return latency, rtn
-            else:
-                # logger.info(f'Client `{self.peer_id}` -> {self.replica_id} RetrySend={command}')
-                self.blacklisted = [self._replica_id]
-                # logger.info(f'{self.peer_id} Blacklisted {self._replica_id}')
-                self.connect()
-                self.send(command)
+            self.send(command)
+
+            while True:
+                poll_result = self.poll(timeout_resend)
+                retries -= 1
+
+                if poll_result:
+                    rtn = self.recv()
+                    # logger.info(f'Client `{self.peer_id}` -> {self.replica_id} Send={command} Recv={rtn.payload}')
+
+                    end = datetime.now()
+                    latency = (end - start).total_seconds()
+                    return latency, rtn
+                elif retries == 0:
+                    break
+                else:
+                    self.send(command)
+
+
+            # logger.info(f'Client `{self.peer_id}` -> {self.replica_id} RetrySend={command}')
+            self.blacklisted = [self._replica_id]
+            # logger.info(f'{self.peer_id} Blacklisted {self._replica_id}')
+            self.connect()

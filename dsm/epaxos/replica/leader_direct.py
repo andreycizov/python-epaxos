@@ -1,6 +1,7 @@
 import logging
 from typing import Dict, Generator, Union
 
+from dsm.epaxos.command.state import Command
 from dsm.epaxos.instance.state import Slot, PostPreparedState, PreAcceptedState
 from dsm.epaxos.instance.store import InstanceStore
 from dsm.epaxos.network.packet import Payload, ClientRequest, SLOTTED, DivergedResponse
@@ -40,19 +41,28 @@ class LeaderCoroutine(Behaviour, DirectInterface):
             self.state.epoch
         )
 
+    def start(self, command: Command):
+        slot = Slot(self.state.replica_id, self.next_instance_id)
+        self.next_instance_id += 1
+
+        local_deps = self.store.deps_store.query(slot, command)
+        slot_seq = max((self.store[x].seq if isinstance(self.store[x], PostPreparedState) else 0 for x in local_deps), default=-1) + 1
+
+        self.leading[slot] = leader_client_request(self.get_quorum(), slot, command, slot_seq, local_deps)
+
+        self.exec(slot)
+
+        return slot
+
     def packet(self, peer: int, payload: Payload):
         if isinstance(payload, ClientRequest):
-            slot = Slot(self.state.replica_id, self.next_instance_id)
-            self.next_instance_id += 1
-
-            local_deps = self.store.deps_store.query(slot, payload.command)
-            slot_seq = max((self.store[x].seq for x in local_deps), default=-1) + 1
-
-            self.store.client_rep[slot] = peer
-
-            self.leading[slot] = leader_client_request(self.get_quorum(), slot, payload.command, slot_seq, local_deps)
-
-            self.exec(slot)
+            x = self.store.command_to_slot.get(payload.command.id)
+            if x:
+                self.store.client_rep[x] = peer
+                self.store.send_reply(x)
+            else:
+                slot = self.start(payload.command)
+                self.store.client_rep[slot] = peer
 
         elif isinstance(payload, DivergedResponse):
             raise NotImplementedError('Diverged')
@@ -68,8 +78,11 @@ class LeaderCoroutine(Behaviour, DirectInterface):
             raise NotImplementedError(
                 f'{payload} {payload.__class__.__name__} {isinstance(payload, Slotted)} {payload.__class__.__bases__}')
 
-    def begin_explicit_prepare(self, slot, to_exec=True):
-        self.leading[slot] = leader_explicit_prepare(self.get_quorum(), slot)
+    def begin_explicit_prepare(self, slot, to_exec=True, reason=None):
+        self.store.file_log.write(
+            f'3\t{slot}\t{reason}\n')
+        self.store.file_log.flush()
+        self.leading[slot] = leader_explicit_prepare(self.get_quorum(), slot, reason)
         if to_exec:
             self.exec(slot)
 
@@ -83,8 +96,6 @@ class LeaderCoroutine(Behaviour, DirectInterface):
                     nxt = self.leading[slot].send(to_send)
                 else:
                     nxt = next(self.leading[slot])
-
-                # logger.debug(f'{self.state.replica_id} {slot} {nxt} {to_send}')
 
                 if isinstance(nxt, Send):
                     self.state.channel.send(nxt.dest, nxt.payload)
@@ -104,14 +115,11 @@ class LeaderCoroutine(Behaviour, DirectInterface):
                 else:
                     assert False, str(nxt)
             except StopIteration:
-                # logger.debug(f'{self.state.replica_id} {slot} {nxt} {to_send} << EXIT')
                 self._stop_leadership(slot)
                 return
             except ExplicitPrepare as e:
-                # logger.debug(f'{self.state.replica_id} {slot} {nxt} {to_send} << EP')
-                # logger.exception(f'{self.state.replica_id} {slot} state reset')
                 self._stop_leadership(slot)
-                self.begin_explicit_prepare(slot, False)
+                self.begin_explicit_prepare(slot, False, e.reason)
             except LeaderException as e:
                 raise
             except BaseException as e:

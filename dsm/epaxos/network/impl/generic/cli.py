@@ -7,10 +7,12 @@ from collections import deque
 from typing import Dict, ClassVar
 
 import sys
+from uuid import uuid4
 
 import numpy as np
+from datetime import datetime
 
-from dsm.epaxos.command.state import AbstractCommand
+from dsm.epaxos.command.state import Command, Mutator
 from dsm.epaxos.network.impl.generic.client import ReplicaClient
 from dsm.epaxos.network.impl.generic.server import ReplicaAddress, ReplicaServer
 
@@ -35,7 +37,7 @@ def cli_logger(level=logging.NOTSET):
 
 
 def replica_server(cls: ClassVar[ReplicaServer], epoch: int, replica_id: int, replicas: Dict[int, ReplicaAddress]):
-    profile = True
+    profile = False
     if profile:
         pr = cProfile.Profile()
         pr.enable()
@@ -52,18 +54,21 @@ def replica_server(cls: ClassVar[ReplicaServer], epoch: int, replica_id: int, re
         sys.exit()
 
     signal.signal(signal.SIGTERM, receive_signal)
+    cli_logger()
 
-    try:
-        cli_logger()
-        with cls(epoch, replica_id, replicas) as server:
+    start_time = datetime.now()
+
+    with cls(epoch, replica_id, replicas) as server:
+        try:
             server.run()
-
-    except:
-        logger.exception(f'Server {replica_id}')
-    finally:
-        if profile:
-            pr.disable()
-            pr.dump_stats(f'{replica_id}.profile')
+        except:
+            logger.exception(f'Server {replica_id}')
+        finally:
+            tot_time = datetime.now() - start_time
+            logger.info(f'{replica_id} {server.state.total_sleep} {server.state.total_timeouts} {server.state.total_exec} {server.state.total_recv} {tot_time.total_seconds()}')
+            if profile:
+                pr.disable()
+                pr.dump_stats(f'{replica_id}.profile')
 
 
 def replica_client(cls: ClassVar[ReplicaClient], peer_id: int, replicas: Dict[int, ReplicaAddress]):
@@ -83,15 +88,18 @@ def replica_client(cls: ClassVar[ReplicaClient], peer_id: int, replicas: Dict[in
             latencies = deque()
 
             for i in range(TOTAL):
-                lat, _ = client.request(AbstractCommand(random.randint(1, 1000000)))
+                command = Command(
+                    uuid4(),
+                    Mutator(
+                        'SET',
+                        random.randint(1, 10000000000)
+                    )
+                )
+                lat, _ = client.request(command)
                 latencies.append(lat)
                 latencies_mat[i] = lat
                 # time.sleep(1.)
                 # print(lat)
-                if i % OP_CP == 0 and i > 0 and peer_id == 100:
-                    lat, _ = client.request(AbstractCommand(0))
-                    latencies.append(lat)
-                    latencies_mat[i] = lat
 
                 if i % EACH == 0:
                     # print(latencies)

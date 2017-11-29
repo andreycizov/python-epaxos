@@ -2,7 +2,7 @@ from typing import NamedTuple, Optional
 
 from copy import copy
 
-from dsm.epaxos.command.state import AbstractCommand, Noop
+from dsm.epaxos.command.state import Command
 from dsm.epaxos.instance.state import Slot, PostPreparedState, StateType, PreAcceptedState, AcceptedState, \
     CommittedState
 from dsm.epaxos.network import packet
@@ -15,7 +15,7 @@ from dsm.epaxos.replica.leader_corout import Quorum, Receive, Load, LoadPostPrep
 
 class DepsQuery(NamedTuple):
     slot: Slot
-    command: AbstractCommand
+    command: Command
 
 
 def acceptor_main(q: Quorum, slot: Slot):
@@ -47,12 +47,11 @@ def acceptor_main(q: Quorum, slot: Slot):
 
 #
 
-
 def acceptor_pre_accept(q: Quorum, slot: Slot, peer: int, pre_accept: packet.PreAcceptRequest):
     inst = yield Load(slot)  # type: Optional[PostPreparedState]
 
     if inst and inst.type in [StateType.Committed, StateType.Accepted]:
-        yield Send(peer, packet.PreAcceptResponseNack(slot, 'STATE'))
+        # yield Send(peer, packet.PreAcceptResponseNack(slot, 'STATE'))
         return
 
     if inst and pre_accept.ballot < inst.ballot:
@@ -103,8 +102,8 @@ def acceptor_pre_accept(q: Quorum, slot: Slot, peer: int, pre_accept: packet.Pre
 def acceptor_accept(q: Quorum, slot: Slot, peer: int, accept: packet.AcceptRequest):
     inst = yield Load(slot)  # type: Optional[PostPreparedState]
 
-    if inst and inst.type in [StateType.Committed, StateType.Accepted]:
-        yield Send(peer, packet.AcceptResponseNack(slot))
+    if inst and inst.type in [StateType.Committed]:
+        # yield Send(peer, packet.AcceptResponseNack(slot))
         return
 
     if inst and accept.ballot < inst.ballot:
@@ -177,7 +176,7 @@ def acceptor_prepare(q: Quorum, slot: Slot, peer: int, prepare: packet.PrepareRe
             packet.PrepareResponseAck(
                 slot,
                 prepare.ballot,
-                Noop,
+                None,
                 0,
                 [],
                 StateType.Prepared

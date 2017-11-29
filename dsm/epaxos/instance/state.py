@@ -3,7 +3,7 @@ from typing import List, NamedTuple, Any
 
 from enum import IntEnum
 
-from dsm.epaxos.command.state import AbstractCommand, Noop
+from dsm.epaxos.command.state import Command
 
 
 class Slot(NamedTuple):
@@ -30,8 +30,10 @@ class Ballot(NamedTuple):
     b: int
     replica_id: int
 
-    def next(self):
-        return Ballot(self.epoch, self.b + 1, self.replica_id)
+    def next(self, replica_id=None):
+        if replica_id is None:
+            replica_id = self.replica_id
+        return Ballot(self.epoch, self.b + 1, replica_id)
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.epoch},{self.b},{self.replica_id})'
@@ -45,22 +47,6 @@ class Ballot(NamedTuple):
         return cls(*json)
 
 
-class Stage(IntEnum):
-    Prepared = 0
-    PreAccepted = 1
-    Accepted = 2
-    Committed = 4
-
-
-class Payload(NamedTuple):
-    body: Any
-
-
-class Status(NamedTuple):
-    payload: Payload
-    stage: Stage
-    seq: int
-    deps: List[Slot]
 
 
 class StateType(IntEnum):
@@ -79,7 +65,7 @@ class InstanceState:
         self.ballot = ballot
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.slot}, {self.ballot})'
+        return f'{self.type.name}({self.slot}, {self.ballot})'
 
     def with_ballot(self, ballot):
         r = copy(self)
@@ -94,7 +80,7 @@ class PreparedState(InstanceState):
 class PostPreparedState(InstanceState):
     type = None  # type: StateType
 
-    def __init__(self, slot: Slot, ballot: Ballot, command: AbstractCommand, seq: int, deps: List[Slot]):
+    def __init__(self, slot: Slot, ballot: Ballot, command: Command, seq: int, deps: List[Slot]):
         self.command = command
         self.seq = seq
         self.deps = deps
@@ -108,12 +94,15 @@ class PostPreparedState(InstanceState):
             r.command = command
         return r
 
+    def __repr__(self):
+        return super().__repr__() + f'({self.command},{self.seq},{self.deps})'
+
     def promote(self, type) -> 'PostPreparedState':
         return STATE_TYPES_MAP[type](self.slot, self.ballot, self.command, self.seq, self.deps)
 
     @classmethod
     def noop(cls, slot, ballot):
-        return cls(slot, ballot, Noop, 0, [])
+        return cls(slot, ballot, None, 0, [])
 
 
 class PreAcceptedState(PostPreparedState):

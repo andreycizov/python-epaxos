@@ -3,7 +3,7 @@ from typing import List
 
 import logging
 
-from dsm.epaxos.command.state import AbstractCommand
+from dsm.epaxos.command.state import Command
 from dsm.epaxos.instance.state import Ballot, Slot, StateType
 from dsm.epaxos.network.packet import Packet, ClientRequest, PreAcceptRequest, PreAcceptResponseAck, \
     PreAcceptResponseNack, AcceptRequest, AcceptResponseAck, AcceptResponseNack, CommitRequest, PrepareRequest, \
@@ -27,7 +27,7 @@ class ReplicaReceiveChannel(Channel):
         self.replica.state.packet_counts[packet.type] += 1
 
         p = packet.payload
-        if random.random() > 0.99:
+        if random.random() > 0.97:
             return
         MAP = {
             ClientRequest: ('leader', 'client_request', lambda p: (packet.origin, p.command)),
@@ -83,7 +83,7 @@ class ReplicaSendChannel(Channel):
         self,
         peer: int,
         slot: Slot, ballot: Ballot,
-        command: AbstractCommand, seq: int, deps: List[Slot]
+        command: Command, seq: int, deps: List[Slot]
     ):
         self.send(peer, PreAcceptRequest(slot, ballot, command, seq, deps))
 
@@ -91,7 +91,7 @@ class ReplicaSendChannel(Channel):
         self,
         peer: int,
         slot: Slot, ballot: Ballot,
-        command: AbstractCommand, seq: int, deps: List[Slot]
+        command: Command, seq: int, deps: List[Slot]
     ):
         self.send(peer, AcceptRequest(slot, ballot, command, seq, deps))
 
@@ -99,7 +99,7 @@ class ReplicaSendChannel(Channel):
         self,
         peer: int,
         slot: Slot, ballot: Ballot,
-        command: AbstractCommand, seq: int, deps: List[Slot]
+        command: Command, seq: int, deps: List[Slot]
     ):
         self.send(peer, CommitRequest(slot, ballot, command, seq, deps))
 
@@ -113,7 +113,7 @@ class ReplicaSendChannel(Channel):
     def client_request(
         self,
         client_peer: int,
-        command: AbstractCommand
+        command: Command
     ):
         self.send(client_peer, ClientRequest(command))
 
@@ -150,7 +150,7 @@ class ReplicaSendChannel(Channel):
         self,
         peer: int,
         slot: Slot, ballot: Ballot,
-        command: AbstractCommand, seq: int, deps: List[Slot],
+        command: Command, seq: int, deps: List[Slot],
         state: StateType
     ):
         self.send(peer, PrepareResponseAck(slot, ballot, command, seq, deps, state))
@@ -169,6 +169,6 @@ class ReplicaSendChannel(Channel):
     def client_response(
         self,
         client_peer: int,
-        command: AbstractCommand
+        command: Command
     ):
         self.send(client_peer, ClientResponse(command))

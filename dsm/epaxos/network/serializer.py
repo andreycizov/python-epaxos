@@ -1,5 +1,6 @@
 import json
 import typing
+import uuid
 from enum import Enum
 from functools import lru_cache
 
@@ -8,42 +9,90 @@ import bson
 ATOMS = (int, str, bool)
 
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=1024)
 def _generate_type_serializer(t):
-    if issubclass(t, Enum):
+    if t.__class__.__name__ == '_Union':
+        assert hasattr(t, '__args__')
+        serializers = []
+
+        for x in t.__args__:
+            try:
+                serializers.append((x, _generate_type_serializer(x)))
+            except:
+                raise ValueError(f'{x}')
+
+        def ser(obj):
+            for i, (s_t, s) in enumerate(serializers):
+                if isinstance(obj, s_t):
+                    return [i, s(obj)]
+            raise ValueError(f'{t} {obj}')
+
+        return ser
+    elif issubclass(t, Enum):
         return lambda val: val.name
+    elif issubclass(t, uuid.UUID):
+        return lambda val: val.hex
     elif issubclass(t, ATOMS):
         return lambda val: val
+    elif issubclass(t, type(None)):
+        return lambda _: None
+
     elif issubclass(t, typing.List):
         assert hasattr(t, '__args__')
         serializer = _generate_type_serializer(t.__args__[0])
         return lambda val: [serializer(x) for x in val]
-    elif hasattr(t, 'serialize'):
-        return t.serialize
+    elif hasattr(t, 'serializer'):
+        return t.serializer(_serialize)
     elif hasattr(t, '_fields') and hasattr(t, '_field_types'):
         # NamedTuple meta
 
         fields = [f for f, _ in t._field_types.items()]
-        serializers = {f: _generate_type_serializer(t) for f, t in t._field_types.items()}
-        return lambda val: {
-            f: serializers[f](getattr(val, f)) for f in fields
-        }
+        serializers = {}
+        for f, t in t._field_types.items():
+            try:
+                serializers[f] = _generate_type_serializer(t)
+            except:
+                raise ValueError(f'{f}')
+
+        def ser(val):
+            r = {}
+            for f in fields:
+                try:
+                    r[f] = serializers[f](getattr(val, f))
+                except:
+                    raise ValueError(f'{t}:{f}:{val}')
+            return r
+
+        return ser
     else:
-        raise NotImplementedError('')
+        raise NotImplementedError(f'{t}')
 
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=1024)
 def _generate_type_deserializer(t):
-    if t in ATOMS:
+    if t.__class__.__name__ == '_Union':
+        assert hasattr(t, '__args__')
+        desers = [_generate_type_deserializer(x) for x in t.__args__]
+
+        def deser(json):
+            return desers[json[0]](json[1])
+
+        return deser
+    elif t in ATOMS:
         return lambda val: val
+    elif issubclass(t, type(None)):
+        return lambda _: None
+    elif issubclass(t, uuid.UUID):
+        return lambda val: uuid.UUID(hex=val)
+
     elif issubclass(t, typing.List):
         assert hasattr(t, '__args__')
         deserializer = _generate_type_deserializer(t.__args__[0])
         return lambda val: [deserializer(x) for x in val]
     elif issubclass(t, Enum):
         return lambda val: t[val]
-    elif hasattr(t, 'deserialize'):
-        return t.deserialize
+    elif hasattr(t, 'deserializer'):
+        return t.deserializer(_deserialize)
     elif hasattr(t, '_field_types'):
         # NamedTuple meta
 
@@ -53,7 +102,7 @@ def _generate_type_deserializer(t):
             f: deserializers[f](val[f]) for f in fields
         })
     else:
-        raise NotImplementedError(f'{t}, {val}')
+        raise NotImplementedError(f'{t}')
 
 
 def _serialize(val):

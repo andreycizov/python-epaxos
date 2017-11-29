@@ -4,10 +4,9 @@ import logging
 
 import gevent
 
-from dsm.epaxos.command.state import AbstractCommand, Noop
 from dsm.epaxos.instance.state import Slot, Ballot, StateType, CommittedState, PostPreparedState
 from dsm.epaxos.instance.store import InstanceStore
-from dsm.epaxos.network.packet import Payload, SLOTTED
+from dsm.epaxos.network.packet import Payload, SLOTTED, DivergedResponse
 from dsm.epaxos.network.peer import AcceptorInterface, DirectInterface
 from dsm.epaxos.replica.abstract import Behaviour
 from dsm.epaxos.replica.acceptor_corout import acceptor_main, DepsQuery
@@ -34,6 +33,10 @@ class AcceptorCoroutine(Behaviour, DirectInterface):
     def packet(self, peer: int, payload: Payload):
         if payload.__class__ in SLOTTED:
             slot = payload.slot
+            if self.store.is_cut(slot):
+                self.state.channel.send(peer, DivergedResponse(slot))
+                return
+
             if slot not in self.instances:
                 self.instances[slot] = acceptor_main(self.leader.get_quorum(), payload.slot)
                 self.exec(slot)
@@ -72,9 +75,10 @@ class AcceptorCoroutine(Behaviour, DirectInterface):
                         assert False
                 elif isinstance(nxt, StorePostPrepared):
                     self.store[nxt.slot] = nxt.inst
+                    self.leader._stop_leadership(nxt.slot)
                 elif isinstance(nxt, DepsQuery):
                     deps = self.store.deps_store.query(nxt.slot, nxt.command)
-                    send = max((self.store[x].seq for x in deps), default=0), deps
+                    send = max((self.store[x].seq if isinstance(self.store[x], PostPreparedState) else 0 for x in deps), default=0), deps
                 else:
                     assert False, str(nxt)
             except StopIteration:
@@ -90,4 +94,4 @@ class AcceptorCoroutine(Behaviour, DirectInterface):
     def check_timeouts(self):
         for slot in self.store.timeout_store.query():
             # logger.debug(f'{self.state.replica_id} explicit prepare {slot}')
-            self.leader.begin_explicit_prepare(slot)
+            self.leader.begin_explicit_prepare(slot, reason='TIMEOUT')

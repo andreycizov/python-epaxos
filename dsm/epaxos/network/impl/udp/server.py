@@ -16,10 +16,13 @@ class UDPReplicaServer(ReplicaServer):
         )
         sock.bind(_addr_conv(self.peer_addr, replica_id))
         sock.settimeout(0)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2000000)
 
         sock_send = socket.socket(
             socket.AF_INET,  # Internet
             socket.SOCK_DGRAM)
+
+
 
         self.socket = sock
         self.socket_send = sock_send
@@ -38,11 +41,14 @@ class UDPReplicaServer(ReplicaServer):
     def recv(self):
         rcvd = 0
 
-        for addr, body in _recv_parse_buffer(self.socket):
+        for i, (addr, body) in enumerate(_recv_parse_buffer(self.socket)):
             self.channel_receive.receive_packet(addr, body)
             rcvd += 1
 
-        return rcvd
+            # if i > 40:
+            #     return False, rcvd
+
+        return True, rcvd
 
     def close(self):
         self.socket.close()

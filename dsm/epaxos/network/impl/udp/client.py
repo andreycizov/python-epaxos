@@ -3,7 +3,7 @@ import socket
 
 import select
 
-from dsm.epaxos.command.state import AbstractCommand
+from dsm.epaxos.command.state import Command
 from dsm.epaxos.network.impl.generic.client import ReplicaClient
 from dsm.epaxos.network.impl.udp.mapper import UDPClientSendChannel, deserialize
 from dsm.epaxos.network.impl.udp.util import _addr_conv, _recv_parse_buffer
@@ -51,7 +51,7 @@ class UDPReplicaClient(ReplicaClient):
         r, _, _ = select.select([self.socket], [], [], max_wait)
         return len(r) > 0
 
-    def send(self, command: AbstractCommand):
+    def send(self, command: Command):
         self.channel.client_request(self.leader_id, command)
 
     def recv(self):

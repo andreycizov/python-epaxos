@@ -17,7 +17,7 @@ replicas = {
     5: ReplicaAddress('tcp://0.0.0.0:60005'),
 }
 
-clients = list(range(100, 110))
+clients = list(range(100, 105))
 
 
 def main():
