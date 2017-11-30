@@ -1,12 +1,14 @@
+import socket
 import struct
 from typing import Dict
 from urllib.parse import urlparse
 
 from dsm.epaxos.net.impl.generic.server import ReplicaAddress
+from dsm.epaxos.net.packet import Packet
+from dsm.serializer import serialize_json, deserialize_json
 
 
-def _addr_conv(peer_addr: Dict[int, ReplicaAddress], peer_id):
-    my_addr = peer_addr[peer_id].replica_addr
+def _addr_conv(my_addr):
     my_addr = urlparse(my_addr)
 
     udp_ip = my_addr.hostname
@@ -31,3 +33,33 @@ def _recv_parse_buffer(socket):
             yield addr, buffer[4:size + 4].tobytes()
     except BlockingIOError:
         return
+
+
+def create_bind(addr, buff_size=2 * 1000 * 1000):
+    sock = create_socket()
+    sock.bind(_addr_conv(addr))
+    sock.settimeout(0)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, buff_size)
+    return sock
+
+
+def create_socket():
+    sock_send = socket.socket(
+        socket.AF_INET,  # Internet
+        socket.SOCK_DGRAM
+    )
+    return sock_send
+
+
+def serialize(packet: Packet):
+    bts = serialize_json(packet)
+    # bts = zlib.compress(bts)
+
+    len_bts = struct.pack('I', len(bts))
+
+    return len_bts + bts
+
+
+def deserialize(body: bytes) -> Packet:
+    # body = zlib.decompress(body)
+    return deserialize_json(Packet, body)

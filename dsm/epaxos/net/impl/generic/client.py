@@ -1,3 +1,4 @@
+import random
 from datetime import datetime, timedelta
 from typing import Dict
 
@@ -14,18 +15,18 @@ class ReplicaClient:
         self.peer_id = peer_id
         self.peer_addr = peer_addr
 
-        self.channel = self.init(peer_id)
+        self.leader_id = None
         self.blacklisted = []
 
-    def init(self, peer_id: int):
-        raise NotImplementedError()
-
-    @property
-    def leader_id(self):
-        raise NotImplementedError()
-
     def connect(self, replica_id=None):
-        raise NotImplementedError()
+        if replica_id is None:
+            if len(self.blacklisted) == len(list(self.peer_addr.keys())):
+                self.blacklisted = []
+
+            while replica_id is None or replica_id in self.blacklisted:
+                replica_id = random.choice(list(self.peer_addr.keys()))
+
+        self.leader_id = replica_id
 
     def poll(self, max_wait) -> bool:
         raise NotImplementedError()
@@ -37,7 +38,7 @@ class ReplicaClient:
         raise NotImplementedError()
 
     def request(self, command: Command, timeout=0.5, timeout_resend=0.05, retries=5):
-        assert self.leader_id is not None
+        # assert self.leader_id is not None
 
         start = datetime.now()
 
@@ -64,8 +65,17 @@ class ReplicaClient:
                 else:
                     self.send(command)
 
-
             # logger.info(f'Client `{self.peer_id}` -> {self.replica_id} RetrySend={command}')
-            self.blacklisted = [self._replica_id]
+            # self.blacklisted = [self._replica_id]
             # logger.info(f'{self.peer_id} Blacklisted {self._replica_id}')
             self.connect()
+
+    def close(self):
+        pass
+
+    def __enter__(self):
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()

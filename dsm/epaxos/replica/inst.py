@@ -1,4 +1,5 @@
 from dsm.epaxos.inst.store import InstanceStore
+from dsm.epaxos.net.packet import Packet
 from dsm.epaxos.replica.acceptor.main import AcceptorCoroutine
 from dsm.epaxos.replica.client.main import ClientsActor
 from dsm.epaxos.replica.config import ReplicaState
@@ -33,6 +34,9 @@ class Replica:
             acceptor,
             net
         ).run()
+
+    def packet(self, p: Packet):
+        self.main.send(Packet)
 
     def checkpoint(self):
         pass

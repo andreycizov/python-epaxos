@@ -19,6 +19,9 @@ class ClientsActor:
             if isinstance(x, Packet):
                 assert isinstance(x.payload, packet.ClientRequest)
 
+                # we may use the clientrequest as a way of keeping the knowledge of whom to reply.
+                # client dests are then
+
                 slot = yield LoadCommandSlot(x.payload.command.id)
 
                 if slot is None:

@@ -27,7 +27,7 @@ class CommandID(uuid.UUID):
 
 
 class Command(NamedTuple):
-    id: uuid.UUID
+    id: CommandID
     payload: Union[Checkpoint, Mutator]
 
     # @classmethod

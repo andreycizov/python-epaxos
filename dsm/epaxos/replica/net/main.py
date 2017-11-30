@@ -4,8 +4,14 @@ from dsm.epaxos.replica.main.ev import Wait, Reply
 from dsm.epaxos.replica.net.ev import Send
 
 
+class ClientChannel:
+    def send(self, dest, payload):
+        assert False, 'Not implemented'
+
+
 class NetActor:
-    def __init__(self):
+    def __init__(self, chan: ClientChannel):
+        self.chan = chan
         self.peers = {}  # type: Dict[int, Any]
 
     def run(self):

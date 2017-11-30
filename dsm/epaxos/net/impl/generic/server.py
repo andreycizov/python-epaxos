@@ -4,10 +4,9 @@ import uuid
 from datetime import datetime, timedelta
 from itertools import groupby
 from time import sleep
-from typing import NamedTuple, Dict, Tuple
+from typing import NamedTuple, Dict, Tuple, Iterable
 
-from dsm.epaxos.cmd.state import Command, Checkpoint
-from dsm.epaxos.inst.store import InstanceStore
+from dsm.epaxos.net.packet import Packet
 from dsm.epaxos.replica.inst import Replica
 from dsm.epaxos.replica.config import ReplicaState
 
@@ -16,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 class ReplicaAddress(NamedTuple):
     replica_addr: str
+    client_addr: str
 
 
 @contextlib.contextmanager
@@ -35,7 +35,7 @@ class ReplicaServer:
     ):
         self.peer_addr = peer_addr
 
-        self.channel_send, self.channel_receive = self.init(replica_id)
+        # self.channel_send, self.channel_receive = self.init(replica_id)
 
         state = ReplicaState(
             self.channel_send,
@@ -49,8 +49,13 @@ class ReplicaServer:
         self.state = state
         self.replica = Replica(state)
 
-    def init(self, replica_id: int):
-        raise NotImplementedError()
+    @property
+    def channel_send(self):
+        assert False, ''
+
+    @property
+    def channel_receive(self):
+        assert False
 
     def poll(self, min_wait) -> bool:
         """
@@ -67,7 +72,7 @@ class ReplicaServer:
         """
         return 0
 
-    def recv(self) -> int:
+    def recv(self) -> Iterable[Packet]:
         raise NotImplementedError()
 
     def main(self):
@@ -140,13 +145,13 @@ class ReplicaServer:
                 has_slept = True
 
             if poll_result:
-                with timeit(upd_recv):
-                    should_poll, rcvd = self.recv()
-                pkts_rcvd += rcvd
+                rcvd = 0
 
-                if rcvd:
-                    with timeit(upd_exec):
-                        self.replica.execute_pending()
+                with timeit(upd_recv):
+                    for x in self.recv():
+                        self.replica.packet(x)
+                        rcvd += 1
+                pkts_rcvd += rcvd
             else:
                 pass
 

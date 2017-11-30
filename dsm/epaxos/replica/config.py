@@ -5,7 +5,7 @@ from typing import Any, List
 class ReplicaState:
     def __init__(
         self,
-        channel: Any,
+        # channel: Any,
         epoch: int,
         replica_id: int,
         quorum_fast: List[int],
@@ -16,7 +16,7 @@ class ReplicaState:
         timeout_range: int = 3,
         checkpoint_each: int = 10,
     ):
-        self.channel = channel
+        # self.channel = channel
         self.epoch = epoch
         self.replica_id = replica_id
         self.quorum_fast = quorum_fast

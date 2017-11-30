@@ -1,56 +1,29 @@
 import select
-import socket
-from typing import Tuple
 
 from dsm.epaxos.net.impl.generic.server import ReplicaServer
-from dsm.epaxos.net.impl.udp.mapper import UDPReplicaReceiveChannel, UDPReplicaSendChannel
-from dsm.epaxos.net.impl.udp.util import _addr_conv, _recv_parse_buffer
-from dsm.epaxos.net.peer import Channel
+from dsm.epaxos.net.impl.udp.util import _recv_parse_buffer, create_bind, create_socket, deserialize
 
 
 class UDPReplicaServer(ReplicaServer):
-    def init(self, replica_id: int) -> Tuple[Channel, Channel]:
-        sock = socket.socket(
-            socket.AF_INET,
-            socket.SOCK_DGRAM
-        )
-        sock.bind(_addr_conv(self.peer_addr, replica_id))
-        sock.settimeout(0)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2000000)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-        sock_send = socket.socket(
-            socket.AF_INET,  # Internet
-            socket.SOCK_DGRAM
-        )
-
-
-
-        self.socket = sock
-        self.socket_send = sock_send
-
-        self.clients = {k: _addr_conv(self.peer_addr, k) for k in self.peer_addr.keys()}
-
-        return UDPReplicaSendChannel(self), UDPReplicaReceiveChannel(self)
+        self.socket_server = create_bind(self.peer_addr[self.state.replica_id].replica_addr)
+        self.socket_send = create_socket()
 
     def poll(self, min_wait):
-        r, _, _ = select.select([self.socket], [], [], min_wait)
+        r, _, _ = select.select([self.socket_server], [], [], min_wait)
         return len(r) > 0
 
     def send(self):
         return 0
 
     def recv(self):
-        rcvd = 0
+        for i, (addr, body) in enumerate(_recv_parse_buffer(self.socket_server)):
+            # todo: save addr -> body mapping in here.
 
-        for i, (addr, body) in enumerate(_recv_parse_buffer(self.socket)):
-            self.channel_receive.receive_packet(addr, body)
-            rcvd += 1
-
-            # if i > 40:
-            #     return False, rcvd
-
-        return True, rcvd
+            yield addr, deserialize(body)
 
     def close(self):
-        self.socket.close()
+        self.socket_server.close()
         self.socket_send.close()

@@ -9,9 +9,13 @@ class Payload:
     pass
 
 
+PeerID = int
+ClientID = PeerID
+
+
 class Packet(NamedTuple):
-    origin: int
-    destination: int
+    origin: PeerID
+    destination: PeerID
     type: str
     payload: Payload
 
@@ -34,6 +38,10 @@ class Packet(NamedTuple):
             return cls(o, d, t, sub_deser(TYPE_TO_PACKET[t])(p))
 
         return deser
+
+
+class ClientIdent(NamedTuple):
+    pass
 
 
 class ClientRequest(NamedTuple, Payload):
@@ -143,7 +151,8 @@ class DivergedResponse(NamedTuple, Payload, ):
 
 PACKET_CLIENT = (
     ClientRequest,
-    ClientResponse
+    ClientResponse,
+    ClientIdent,
 )
 
 PACKET_ACCEPTOR = (
