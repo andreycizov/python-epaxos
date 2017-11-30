@@ -24,6 +24,8 @@ class ClientsActor:
 
                 slot = yield LoadCommandSlot(x.payload.command.id)
 
+                print('ZZZZ', slot)
+
                 if slot is None:
                     slot = yield LeaderStart(x.payload.command)
 
@@ -34,7 +36,7 @@ class ClientsActor:
 
                 self.peers[x.origin].append(slot)
 
-                yield Reply()
+                yield Reply('ACK')
             elif isinstance(x, SlotState):
                 if x.slot in self.clients and x.inst.state.stage == Stage.Committed:
                     yield Send(

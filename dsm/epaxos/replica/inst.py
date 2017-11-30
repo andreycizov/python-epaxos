@@ -4,7 +4,7 @@ from dsm.epaxos.replica.acceptor.main import AcceptorCoroutine
 from dsm.epaxos.replica.client.main import ClientsActor
 from dsm.epaxos.replica.config import ReplicaState
 from dsm.epaxos.replica.leader.main import LeaderCoroutine
-from dsm.epaxos.replica.main.ev import Tick
+from dsm.epaxos.replica.main.ev import Tick, Wait
 from dsm.epaxos.replica.main.main import MainCoroutine
 from dsm.epaxos.replica.net.main import NetActor
 from dsm.epaxos.replica.state.main import StateActor
@@ -35,14 +35,13 @@ class Replica:
             net
         ).run()
 
-    def packet(self, p: Packet):
-        self.main.send(Packet)
+        assert isinstance(next(self.main), Wait)
 
-    def checkpoint(self):
-        pass
+    
+
+    def packet(self, p: Packet):
+        self.main.send(p)
 
     def tick(self):
         self.state.tick()
         self.main.send(Tick(self.state.ticks))
-
-

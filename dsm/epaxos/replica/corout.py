@@ -11,13 +11,16 @@ class CoExit(CoException):
     pass
 
 
-def coroutiner(corout, send=None, router=None):
+NOTHING = object()
+
+
+def coroutiner(corout, send=NOTHING, router=None):
     while True:
         try:
             send_next = send
-            send = None
+            send = NOTHING
 
-            if send_next:
+            if send_next != NOTHING:
                 nxt = corout.send(send_next)
             else:
                 nxt = next(corout)

@@ -1,17 +1,17 @@
-from typing import Dict, Any
+from typing import Dict, Any, NamedTuple
 
+from dsm.epaxos.net.packet import Packet, Payload
 from dsm.epaxos.replica.main.ev import Wait, Reply
 from dsm.epaxos.replica.net.ev import Send
 
 
-class ClientChannel:
-    def send(self, dest, payload):
-        assert False, 'Not implemented'
+class ClientNetComm(NamedTuple):
+    dest: int
+    payload: Payload
 
 
 class NetActor:
-    def __init__(self, chan: ClientChannel):
-        self.chan = chan
+    def __init__(self):
         self.peers = {}  # type: Dict[int, Any]
 
     def run(self):
@@ -19,7 +19,7 @@ class NetActor:
             x = yield Wait()  # same as doing a Receive on something
 
             if isinstance(x, Send):
-                print('Sending', x.dest, x.payload)
+                yield ClientNetComm(x.dest, x.payload)
 
                 yield Reply('sent')
             else:

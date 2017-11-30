@@ -36,6 +36,8 @@ class AcceptorCoroutine(NamedTuple):
             del self.subs[slot]
 
     def run(self):
+        # what does not work here (?)
+
         while True:
             x = yield Wait()
 
