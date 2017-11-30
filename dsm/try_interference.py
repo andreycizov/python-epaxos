@@ -1,67 +1,58 @@
 import random
 from pprint import pprint
 from typing import Tuple, NamedTuple, Dict
+from uuid import uuid4
 
 import tarjan
 
-
-class XX(NamedTuple):
-    id: str
-    keys: Tuple[str, ...]
-
-
-def X(name, *args: str):
-    return XX(name, tuple(args))
-
+from dsm.epaxos.cmd.state import Command, Mutator, Checkpoint
+from dsm.epaxos.inst.deps.cache import KeyedDepsCache
+from dsm.epaxos.inst.state import Slot
 
 IN = [
-    X('Wa', 'a'),
-    X('Wb', 'b'),
-    X('Wab', 'a', 'b'),
-    X('Ra', 'a'),
-    X('Rb', 'b'),
-    X('X0b', 'b'),
+    Command(
+        uuid4(),
+        Mutator(
+            'SET',
+            [1, 2]
+        )
+    ),
+    Command(
+        uuid4(),
+        Mutator(
+            'SET',
+            [1, 2, 4]
+        )
+    ),
+    Command(
+        uuid4(),
+        Mutator(
+            'SET',
+            [10]
+        )
+    ),
+    Command(
+        uuid4(),
+        Checkpoint(5)
+    ),
 ]
+
+IN = [(Slot(0, i), x) for i, x in enumerate(IN)]
 
 IN_LAST = [
-    X('z', 'www')
+    Command(
+        uuid4(),
+        Checkpoint(6)
+    ),
 ]
 
+IN_LAST = [(Slot(1, i), x) for i, x in enumerate(IN_LAST)]
 
-class Interferences(NamedTuple):
-    last_seq: int
-    id: str
-
-
-INTER = {}  # type: Dict[str, Interferences]
+store = KeyedDepsCache()
 
 
-def xchange(cmd: XX):
-    last_seq = -1
-    for x in cmd.keys:
-        inter_val = INTER.get(x)
-
-        if inter_val and inter_val.id != cmd.id:
-            last_seq = max(last_seq, inter_val.last_seq)
-
-    last_seq = last_seq + 1
-
-    r = []
-
-    for x in cmd.keys:
-        inter_val = INTER.get(x)
-
-        if inter_val:
-            r.append(inter_val.id)
-
-        INTER[x] = Interferences(
-            last_seq,
-            cmd.id
-        )
-
-    r = [x for x in set(r) if x != cmd.id]
-
-    return last_seq, r
+def xchange(slot: Slot, cmd: Command):
+    return store.xchange(slot, cmd)
 
 
 def shuffle(x):
@@ -73,10 +64,10 @@ def shuffle(x):
 def build_deps(population):
     rd = {}
     rs = {}
-    for cmd in population:
-        seq, deps = xchange(cmd)
-        rd[cmd.id] = deps
-        rs[cmd.id] = seq
+    for slot, cmd in population:
+        seq, deps = xchange(slot, cmd)
+        rd[slot] = deps
+        rs[slot] = seq
     return rd, rs
 
 
