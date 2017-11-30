@@ -20,7 +20,8 @@ class UDPReplicaServer(ReplicaServer):
 
         sock_send = socket.socket(
             socket.AF_INET,  # Internet
-            socket.SOCK_DGRAM)
+            socket.SOCK_DGRAM
+        )
 
 
 

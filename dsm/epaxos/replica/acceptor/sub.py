@@ -2,7 +2,7 @@ from dsm.epaxos.inst.state import Slot, State, Stage
 from dsm.epaxos.inst.store import InstanceStoreState, IncorrectStage, IncorrectBallot
 from dsm.epaxos.net import packet
 from dsm.epaxos.replica.net.ev import Send, Receive
-from dsm.epaxos.replica.state import Quorum
+from dsm.epaxos.replica.quorum.ev import Quorum
 from dsm.epaxos.replica.state.ev import Load, Store
 
 

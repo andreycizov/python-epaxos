@@ -1,6 +1,5 @@
 import struct
 
-from dsm.epaxos.net.impl.generic.mapper import ReplicaReceiveChannel, ReplicaSendChannel
 from dsm.epaxos.net.packet import ClientRequest, Packet
 from dsm.serializer import deserialize_json, serialize_json
 

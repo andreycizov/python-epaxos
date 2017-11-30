@@ -3,7 +3,6 @@ from typing import Dict
 
 from dsm.epaxos.cmd.state import Command
 from dsm.epaxos.net.impl.generic.server import ReplicaAddress, logger
-from dsm.epaxos.net.peer import Channel
 
 
 class ReplicaClient:
@@ -18,7 +17,7 @@ class ReplicaClient:
         self.channel = self.init(peer_id)
         self.blacklisted = []
 
-    def init(self, peer_id: int) -> Channel:
+    def init(self, peer_id: int):
         raise NotImplementedError()
 
     @property

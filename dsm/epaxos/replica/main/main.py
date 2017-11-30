@@ -14,7 +14,7 @@ from dsm.epaxos.replica.leader.main import LeaderCoroutine
 from dsm.epaxos.replica.main.ev import Reply, Wait, Tick
 from dsm.epaxos.replica.net.ev import Send
 from dsm.epaxos.replica.net.main import NetActor
-from dsm.epaxos.replica.state import ReplicaState
+from dsm.epaxos.replica.config import ReplicaState
 from dsm.epaxos.replica.state.ev import LoadCommandSlot, Load, Store, SlotState
 from dsm.epaxos.replica.state.main import StateActor
 
@@ -65,7 +65,7 @@ class MainCoroutine(NamedTuple):
             ev = yield
 
             if isinstance(ev, Tick):
-                pass
+                self.run_sub(self.acceptor, ev)
             elif isinstance(ev, Packet):
                 if isinstance(ev.payload, PACKET_CLIENT):
                     self.run_sub(self.clients, ev)
@@ -102,13 +102,7 @@ def main():
     next(acceptor)
     next(net)
 
-    m = MainCoroutine(
-        state,
-        clients,
-        leader,
-        acceptor,
-        net
-    ).run()
+
 
     next(m)
 

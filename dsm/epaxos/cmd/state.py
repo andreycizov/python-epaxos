@@ -20,7 +20,10 @@ CLASSES_MAP = {k.__name__[:1]: k for k in CLASSES}
 CLASSES_MAP_BACK = {k: k.__name__[:1] for k in CLASSES}
 
 
-CommandID = uuid.UUID
+class CommandID(uuid.UUID):
+    @classmethod
+    def create(cls):
+        return uuid.uuid4()
 
 
 class Command(NamedTuple):

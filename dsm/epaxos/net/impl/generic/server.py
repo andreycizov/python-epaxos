@@ -6,13 +6,10 @@ from itertools import groupby
 from time import sleep
 from typing import NamedTuple, Dict, Tuple
 
-from dsm.epaxos.cmd.deps.default import DefaultDepsStore
 from dsm.epaxos.cmd.state import Command, Checkpoint
 from dsm.epaxos.inst.store import InstanceStore
-from dsm.epaxos.net.peer import Channel
-from dsm.epaxos.replica.replica import Replica
-from dsm.epaxos.replica.state import ReplicaState
-from dsm.epaxos.timeout.store import TimeoutStore
+from dsm.epaxos.replica.inst import Replica
+from dsm.epaxos.replica.config import ReplicaState
 
 logger = logging.getLogger(__name__)
 
@@ -42,19 +39,17 @@ class ReplicaServer:
 
         state = ReplicaState(
             self.channel_send,
-            epoch, replica_id,
+            epoch,
+            replica_id,
             list(peer_addr.keys()),
             list(peer_addr.keys()),
             True
         )
 
-        store = InstanceStore()
-
         self.state = state
-        self.replica = Replica(state, store)
-        store.replica = self.replica
+        self.replica = Replica(state)
 
-    def init(self, replica_id: int) -> Tuple[Channel, Channel]:
+    def init(self, replica_id: int):
         raise NotImplementedError()
 
     def poll(self, min_wait) -> bool:
@@ -105,7 +100,6 @@ class ReplicaServer:
         def upd_timeouts(x):
             self.state.total_timeouts += x.total_seconds()
 
-
         def upd_recv(x):
             self.state.total_recv += x.total_seconds()
 
@@ -114,7 +108,7 @@ class ReplicaServer:
 
             to_next_tick = (next_tick_time - loop_start_time).total_seconds()
 
-            min_wait_poll = max([0, to_next_tick * 0.9, td_tick.total_seconds()*0.90])
+            min_wait_poll = max([0, to_next_tick * 0.9, td_tick.total_seconds() * 0.90])
 
             if should_poll:
                 poll_result = self.poll(min_wait_poll)
@@ -125,8 +119,6 @@ class ReplicaServer:
             loop_poll_time = datetime.now()
             self.state.total_sleep += (loop_poll_time - loop_start_time).total_seconds()
 
-
-
             # print(self.state.ticks)
 
             assert last_seen_tick == self.state.ticks or last_seen_tick == self.state.ticks - 1, (
@@ -135,36 +127,8 @@ class ReplicaServer:
 
             # print(self.state.ticks)
 
-            if self.state.ticks != last_tick and self.state.ticks % (self.state.jiffies * cp_ech) == 0:
-                checkpoint_id = self.state.ticks // (self.state.jiffies * cp_ech)
-                q_length = len(self.state.quorum_full)
-                r_idx = self.state.quorum_full.index(self.state.replica_id)
-
-                if checkpoint_id % q_length == r_idx:
-                    self.replica.leader.start(
-                        Command(
-                            uuid.uuid4(),
-                            Checkpoint(
-                                checkpoint_id * q_length + r_idx
-                            )
-                        )
-                    )
-
-                last_tick = self.state.ticks
-
-                fmtd = '\n'.join(f'\t\t{x.name}: {y}' for x, y in sorted((y, len(list(x))) for y, x in
-                       groupby(sorted([v.state.stage for k, v in self.replica.store.inst.items()]))))
-
-                fmtd3 = '\n'.join(f'\t\t{x}: {y}' for x, y in sorted([(k, v) for k, v in self.state.packet_counts.items()]))
-
-                logger.debug(f'\n{self.state.replica_id}\t{self.state.ticks}\n\tInstances:\n{fmtd}\n\tPackets:\n{fmtd3}')
-
-
             if loop_poll_time > next_tick_time:
                 self.replica.tick()
-
-                with timeit(upd_timeouts):
-                    self.replica.check_timeouts()
                 next_tick_time = next_tick_time + td_tick
 
             pkts_sent += self.send()
@@ -187,7 +151,6 @@ class ReplicaServer:
                 pass
 
             pkts_sent += self.send()
-
 
     def run(self):
         try:

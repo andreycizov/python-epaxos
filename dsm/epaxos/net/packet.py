@@ -194,19 +194,3 @@ PACKETS = [
 ]
 
 TYPE_TO_PACKET = {v.__name__: v for v in PACKETS}
-
-SLOTTED = [
-    PreAcceptRequest,
-    PreAcceptResponseAck,
-    PreAcceptResponseNack,
-
-    AcceptRequest,
-    AcceptResponseAck,
-    AcceptResponseNack,
-
-    CommitRequest,
-    PrepareRequest,
-    PrepareResponseAck,
-    DivergedResponse,
-    PrepareResponseNack,
-]

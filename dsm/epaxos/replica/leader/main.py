@@ -6,7 +6,8 @@ from dsm.epaxos.replica.corout import coroutiner, CoExit
 from dsm.epaxos.replica.leader.sub import leader_client_request, leader_explicit_prepare
 from dsm.epaxos.replica.main.ev import Wait, Reply
 from dsm.epaxos.replica.net.ev import Receive
-from dsm.epaxos.replica.state import ReplicaState, Quorum
+from dsm.epaxos.replica.quorum.ev import Quorum
+from dsm.epaxos.replica.config import ReplicaState
 
 
 class LeaderCoroutine:

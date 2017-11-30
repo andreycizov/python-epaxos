@@ -3,11 +3,11 @@ import signal
 from multiprocessing import Process
 from typing import List
 
-from dsm.epaxos.network.impl.generic.cli import ReplicaAddress, replica_client, replica_server
-from dsm.epaxos.network.impl.udp.client import UDPReplicaClient
-from dsm.epaxos.network.impl.udp.server import UDPReplicaServer
-from dsm.epaxos.network.impl.zeromq.client import ZMQReplicaClient
-from dsm.epaxos.network.impl.zeromq.server import ZMQReplicaServer
+from dsm.epaxos.net.impl.generic.cli import ReplicaAddress, replica_client, replica_server
+from dsm.epaxos.net.impl.udp.client import UDPReplicaClient
+from dsm.epaxos.net.impl.udp.server import UDPReplicaServer
+from dsm.epaxos.net.impl.zeromq.client import ZMQReplicaClient
+from dsm.epaxos.net.impl.zeromq.server import ZMQReplicaServer
 
 replicas = {
     1: ReplicaAddress('tcp://0.0.0.0:60001'),
