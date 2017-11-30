@@ -1,7 +1,7 @@
 from dsm.epaxos.inst.state import Slot
 from dsm.epaxos.net import packet
 from dsm.epaxos.net.packet import PACKET_LEADER
-from dsm.epaxos.replica.leader.ev import LeaderStart, LeaderExplicitPrepare
+from dsm.epaxos.replica.leader.ev import LeaderStart, LeaderExplicitPrepare, LeaderStop
 from dsm.epaxos.replica.corout import coroutiner, CoExit
 from dsm.epaxos.replica.leader.sub import leader_client_request, leader_explicit_prepare
 from dsm.epaxos.replica.main.ev import Wait, Reply
@@ -26,38 +26,49 @@ class LeaderCoroutine:
         try:
             req = coroutiner(corout, payload)
             while not isinstance(req, Receive):
-                rep = yield req
-                req = coroutiner(corout, rep)
+                try:
+                    rep = yield req
+                except BaseException as e:
+                    req = corout.throw(e)
+                else:
+                    req = coroutiner(corout, rep)
             req: Receive
             self.waiting_for[slot] = req.type
         except CoExit:
-            del self.waiting_for[slot]
+            if slot in self.waiting_for:
+                del self.waiting_for[slot]
             del self.subs[slot]
+        # except BaseException as e:
+        #     corout.throw(e)
 
-    def run(self):
-        while True:
-            x = yield Wait()
+    def event(self, x):
+        if isinstance(x, packet.Packet) and isinstance(x.payload, PACKET_LEADER):
+            slot = x.payload.slot  # type: Slot
 
-            if isinstance(x, packet.Packet) and isinstance(x.payload, PACKET_LEADER):
-                slot = x.payload.slot  # type: Slot
+            if slot in self.waiting_for:
+                yield from self.run_sub(slot, (x.origin, Receive.from_waiting(self.waiting_for.pop(slot), x.payload)))
 
-                if slot in self.waiting_for:
-                    yield from self.run_sub(slot, Receive.from_waiting(self.waiting_for.pop(slot), x.payload))
+            yield Reply()
+        elif isinstance(x, LeaderStart):
+            slot = Slot(self.quorum.replica_id, self.next_instance_id)
+            self.next_instance_id += 1
 
-            elif isinstance(x, LeaderStart):
-                slot = Slot(self.quorum.replica_id, self.next_instance_id)
-                self.next_instance_id += 1
+            self.subs[slot] = leader_client_request(self.quorum, slot, x.command)
 
-                self.subs[slot] = leader_client_request(self.quorum, slot, x.command)
+            yield from self.run_sub(slot)
+            yield Reply(slot)
+        elif isinstance(x, LeaderStop):
+            if x.slot in self.waiting_for:
+                del self.waiting_for[x.slot]
+            if x.slot in self.subs:
+                del self.subs[x.slot]
+            yield Reply()
+        elif isinstance(x, LeaderExplicitPrepare):
+            prev = self.subs.get(x.slot) is not None
 
-                yield from self.run_sub(slot)
-                yield Reply(slot)
-            elif isinstance(x, LeaderExplicitPrepare):
-                prev = self.subs.get(x.slot) is not None
+            self.subs[x.slot] = leader_explicit_prepare(self.quorum, x.slot, x.reason)
 
-                self.subs[x.slot] = leader_explicit_prepare(self.quorum, x.slot, x.reason)
-
-                yield from self.run_sub(x.slot)
-                yield prev
-            else:
-                assert False, x
+            yield from self.run_sub(x.slot)
+            yield Reply(prev)
+        else:
+            assert False, x

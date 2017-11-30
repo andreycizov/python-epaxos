@@ -142,7 +142,7 @@ def leader_explicit_prepare(q: Quorum, slot: Slot, reason=None):
     identic_keys = defaultdict(list)
 
     for r in replies:
-        identic_keys[(r.r.state, r.r.command, r.r.seq, tuple(sorted(r.r.deps)))].append(r)
+        identic_keys[(r.r.state, r.r.command.id if r.r.command else None, r.r.seq, tuple(sorted(r.r.deps)))].append(r)
 
     identic_groups = [
         (x, list(y))
@@ -169,8 +169,8 @@ def leader_explicit_prepare(q: Quorum, slot: Slot, reason=None):
                 )
             )
         )
-        yield from leader_accept(q, slot)
-    elif max_state == StateType.PreAccepted:
+        yield from leader_accept(q, slot, new_inst)
+    elif max_state == Stage.PreAccepted:
         reply = [x for x in replies if x.r.state == max_state][0].r
 
         new_inst = yield Store(

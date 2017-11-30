@@ -1,3 +1,4 @@
+from itertools import groupby
 from typing import NamedTuple, Dict, List, Optional
 
 from dsm.epaxos.cmd.state import Command, Checkpoint, Mutator
@@ -71,12 +72,22 @@ class KeyedDepsCache:
                 new_seq = max(max((x.seq for x in self.store.values()), default=-1), self.cp.state.seq) + 1
                 new_deps = [x.slot for x in self.store.values()] + [self.cp.state.slot]
 
+            new_deps = sorted(set(new_deps))
+
+            def last(xs):
+                r = None
+                for x in xs:
+                    r = x
+                return x
+
+            new_deps = [last(xs) for x, xs in groupby(new_deps, key=lambda x: x.replica_id)]
+
             self.cp = CPCacheState(
                 CacheState(
                     slot,
                     new_seq
                 ),
-                sorted(set(new_deps))
+                sorted(new_deps)
             )
 
             self.store = {}

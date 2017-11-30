@@ -11,12 +11,9 @@ class NetActor:
     def send(self, payload: Send):
         raise NotImplementedError('')
 
-    def run(self):
-        while True:
-            x = yield Wait()  # same as doing a Receive on something
-
-            if isinstance(x, Send):
-                self.send(x)
-                yield Reply()
-            else:
-                assert False, x
+    def event(self, x):
+        if isinstance(x, Send):
+            self.send(x)
+            yield Reply()
+        else:
+            assert False, x

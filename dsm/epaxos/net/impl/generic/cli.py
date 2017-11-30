@@ -38,7 +38,7 @@ def cli_logger(level=logging.NOTSET):
 
 
 def replica_server(cls: ClassVar[ReplicaServer], epoch: int, replica_id: int, replicas: Dict[int, ReplicaAddress]):
-    profile = False
+    profile = True
     if profile:
         pr = cProfile.Profile()
         pr.enable()
@@ -77,7 +77,7 @@ def replica_client(cls: ClassVar[ReplicaClient], peer_id: int, replicas: Dict[in
         cli_logger()
 
         TOTAL = 20000
-        EACH = 1
+        EACH = 100
         OP_CP = 1000
         LAT_BUF = 10
 

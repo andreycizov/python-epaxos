@@ -1,4 +1,5 @@
 import logging
+import random
 import select
 
 from dsm.epaxos.net.impl.generic.server import ReplicaServer
@@ -10,6 +11,8 @@ from dsm.epaxos.replica.net.main import NetActor
 from dsm.epaxos.replica.quorum.ev import Quorum
 
 logger = logging.getLogger(__name__)
+
+DROP_RATE = 0.03
 
 
 class UDPNetActor(NetActor):
@@ -36,7 +39,17 @@ class UDPNetActor(NetActor):
             logger.error(f'Dropping packet {packet} due to unknown destination')
             return
 
-        self.socket.sendto(serialize(packet), dst)
+        # print('>>>>>>>>>', self.quorum.replica_id, s.dest, packet)
+
+        if random.random() < DROP_RATE:
+            return
+
+        body = serialize(packet)
+        try:
+            self.socket.sendto(body, dst)
+        except OSError:
+            logger.info(f'{body}')
+            logger.exception('')
 
     def close(self):
         self.socket.close()
@@ -63,6 +76,11 @@ class UDPReplicaServer(ReplicaServer):
             # todo: save addr -> body mapping in here.
 
             x = deserialize(body)
+
+            if random.random() < DROP_RATE:
+                continue
+
+            # print('<<<<<<<<', self.quorum.replica_id, x)
 
             if x.origin not in self.net_actor.clients:
                 self.net_actor.clients[x.origin] = addr

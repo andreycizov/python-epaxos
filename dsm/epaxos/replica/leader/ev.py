@@ -8,6 +8,11 @@ class LeaderStart(NamedTuple):
     command: Command
 
 
+class LeaderStop(NamedTuple):
+    slot: Slot
+    reason: str = 'NONE'
+
+
 class LeaderExplicitPrepare(NamedTuple):
     slot: Slot
     reason: str

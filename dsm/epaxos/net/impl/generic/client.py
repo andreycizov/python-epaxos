@@ -38,17 +38,14 @@ class ReplicaClient:
     def recv(self):
         raise NotImplementedError()
 
-    def request(self, command: Command, timeout=0.5, timeout_resend=0.05, retries=5):
+    def request(self, command: Command, timeout=10, timeout_resend=0.1, retries_max=5):
         # assert self.leader_id is not None
 
         start = datetime.now()
 
         while True:
-            total_to_wait = retries
-
-            poll_result = None
-
             self.send(command)
+            retries = retries_max
 
             while True:
                 poll_result = self.poll(timeout_resend)
@@ -56,6 +53,7 @@ class ReplicaClient:
 
                 if poll_result:
                     rtn = self.recv()
+                    # print(f'{self.peer_id} reply {rtn}')
                     # logger.info(f'Client `{self.peer_id}` -> {self.replica_id} Send={command} Recv={rtn.payload}')
 
                     end = datetime.now()

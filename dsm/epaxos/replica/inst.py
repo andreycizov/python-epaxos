@@ -16,30 +16,23 @@ class Replica:
         self.quorum = quorum
         self.store = InstanceStore()
 
-        state = StateActor().run()
-        clients = ClientsActor().run()
-        leader = LeaderCoroutine(quorum, ).run()
-        acceptor = AcceptorCoroutine(quorum, config).run()
-        net = net_actor.run()
-
-        next(state)
-        next(clients)
-        next(leader)
-        next(acceptor)
-        next(net)
+        state = StateActor(self.quorum)
+        clients = ClientsActor()
+        leader = LeaderCoroutine(quorum, )
+        acceptor = AcceptorCoroutine(quorum, config)
+        net = net_actor
 
         self.main = MainCoroutine(
             state,
             clients,
             leader,
             acceptor,
-            net
-        ).run()
-
-        assert isinstance(next(self.main), Wait)
+            net,
+            trace=self.quorum.replica_id == 1
+        )
 
     def packet(self, p: Packet):
-        self.main.send(p)
+        self.main.event(p)
 
     def tick(self, idx):
-        self.main.send(Tick(idx))
+        self.main.event(Tick(idx))

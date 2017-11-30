@@ -61,4 +61,4 @@ class State(NamedTuple):
     deps: List[Slot]
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.stage},{self.command},{self.seq},{self.deps})'
+        return f'{self.__class__.__name__}({self.stage.name},{self.command},{self.seq},{self.deps})'

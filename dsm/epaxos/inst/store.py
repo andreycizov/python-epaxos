@@ -1,4 +1,4 @@
-from typing import NamedTuple, Dict, Optional
+from typing import NamedTuple, Dict, Optional, Tuple
 from uuid import UUID
 
 from dsm.epaxos.cmd.state import CommandID
@@ -10,9 +10,12 @@ class InstanceStoreState(NamedTuple):
     ballot: Ballot
     state: State
 
+    def __repr__(self):
+        return f'ISS({self.ballot},{self.state})'
+
 
 class TransitionException(Exception):
-    def __init__(self, curr_inst: InstanceStoreState):
+    def __init__(self, curr_inst: InstanceStoreState, new_inst: InstanceStoreState):
         self.inst = curr_inst
 
 
@@ -28,6 +31,11 @@ class IncorrectCommand(TransitionException):
     pass
 
 
+class LoadResult(NamedTuple):
+    exists: bool
+    inst: InstanceStoreState
+
+
 class InstanceStore:
     def __init__(self):
         self.inst = {}  # type: Dict[Slot, InstanceStoreState]
@@ -36,8 +44,10 @@ class InstanceStore:
 
     def load(self, slot: Slot):
         r = self.inst.get(slot)
+        exists = True
 
         if r is None:
+            exists = False
             r = InstanceStoreState(
                 slot.ballot_initial(),
                 State(
@@ -48,22 +58,26 @@ class InstanceStore:
                 )
             )
 
-        return r
+        return LoadResult(exists, r)
 
-    def load_cmd_slot(self, id: CommandID) -> Optional[Slot]:
-        return self.cmd_to_slot.get(id)
+    def load_cmd_slot(self, id: CommandID) -> Optional[Tuple[Slot, InstanceStoreState]]:
+        r = self.cmd_to_slot.get(id)
+        if not r:
+            return None
+        else:
+            return r, self.load(r).inst
 
     def update(self, slot: Slot, new: InstanceStoreState):
-        old = self.load(slot)
+        exists, old = self.load(slot)
 
         if new.ballot < old.ballot:
-            raise IncorrectBallot(old)
+            raise IncorrectBallot(old, new)
 
         if new.state.stage < old.state.stage:
-            raise IncorrectStage(old)
+            raise IncorrectStage(old, new)
 
         if old.state.command is not None and old.state.command != new.state.command:
-            raise IncorrectCommand(old)
+            raise IncorrectCommand(old, new)
 
         if new.state.stage == Stage.PreAccepted and new.state.command:
             # rethink the command ordering
@@ -83,6 +97,10 @@ class InstanceStore:
 
         self.inst[slot] = upd
 
-        self.cmd_to_slot[new.state.command.id] = slot
+        if old.state.command:
+            del self.cmd_to_slot[old.state.command.id]
 
-        return upd
+        if new.state.command:
+            self.cmd_to_slot[new.state.command.id] = slot
+
+        return old, upd

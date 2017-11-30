@@ -18,10 +18,10 @@ class LoadCommandSlot(NamedTuple):
 
 class Store(NamedTuple):
     slot: Slot
-    state: InstanceStoreState
+    inst: InstanceStoreState
 
     def __repr__(self):
-        return f'Store({self.slot},{self.state})'
+        return f'Store({self.slot},{self.inst})'
 
 
 class InstanceState(NamedTuple):

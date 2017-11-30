@@ -47,4 +47,4 @@ class UDPReplicaClient(ReplicaClient):
         return deserialize(body)
 
     def close(self):
-        self.socket.disconnect()
+        self.socket.close()

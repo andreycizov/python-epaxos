@@ -1,6 +1,7 @@
 from dsm.epaxos.inst.state import Slot, State, Stage
 from dsm.epaxos.inst.store import InstanceStoreState, IncorrectStage, IncorrectBallot
 from dsm.epaxos.net import packet
+from dsm.epaxos.replica.leader.ev import LeaderStop
 from dsm.epaxos.replica.net.ev import Send, Receive
 from dsm.epaxos.replica.quorum.ev import Quorum
 from dsm.epaxos.replica.state.ev import Load, Store
@@ -54,6 +55,7 @@ def acceptor_pre_accept(q: Quorum, slot: Slot, peer: int, pre_accept: packet.Pre
 
             deps_comm_mask.append(xx.state.stage >= Stage.Committed)
 
+        yield LeaderStop(slot, 'acceptor')
         yield Send(
             peer,
             packet.PreAcceptResponseAck(
@@ -87,6 +89,7 @@ def acceptor_accept(q: Quorum, slot: Slot, peer: int, accept: packet.AcceptReque
             )
         )  # type: InstanceStoreState
 
+        yield LeaderStop(slot, 'acceptor')
         yield Send(
             peer,
             packet.AcceptResponseAck(
@@ -117,6 +120,7 @@ def acceptor_commit(q: Quorum, slot: Slot, peer: int, commit: packet.CommitReque
             )
         )  # type: InstanceStoreState
 
+        yield LeaderStop(slot, 'acceptor')
         yield Send(
             peer,
             packet.AcceptResponseAck(
@@ -125,6 +129,8 @@ def acceptor_commit(q: Quorum, slot: Slot, peer: int, commit: packet.CommitReque
             )
         )
     except IncorrectBallot as e:
+        return
+    except IncorrectStage as e:
         return
 
 

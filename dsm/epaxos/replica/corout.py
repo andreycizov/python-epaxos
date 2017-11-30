@@ -33,5 +33,4 @@ def coroutiner(corout, send=NOTHING, router=None):
             return e.val
         except StopIteration:
             raise CoExit()
-        except BaseException as e:
-            corout.throw(e)
+

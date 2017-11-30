@@ -30,6 +30,9 @@ class Command(NamedTuple):
     id: CommandID
     payload: Union[Checkpoint, Mutator]
 
+    def __repr__(self):
+        return f'Command({self.id.hex},{self.payload})'
+
     # @classmethod
     # def deserializer(cls, sub_des):
     #     return lambda json: cls(sub_des(uuid.UUID, json['i']), sub_des(CLASSES_MAP[json['x']], json['p']))
