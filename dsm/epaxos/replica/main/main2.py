@@ -14,9 +14,8 @@ from dsm.epaxos.replica.leader.ev import LeaderStart
 from dsm.epaxos.replica.leader.main import LeaderCoroutine
 from dsm.epaxos.replica.main.ev import Reply, Wait, Tick
 from dsm.epaxos.replica.net.ev import Send
-from dsm.epaxos.replica.net.main import NetActor
+from dsm.epaxos.replica.net.main import NetActor, ClientNetComm
 from dsm.epaxos.replica.config import ReplicaState
-from dsm.epaxos.replica.quorum.ev import Quorum, Configuration
 from dsm.epaxos.replica.state.ev import LoadCommandSlot, Load, Store, InstanceState
 from dsm.epaxos.replica.state.main import StateActor
 
@@ -47,81 +46,92 @@ class MainCoroutine(NamedTuple):
 
     def route(self, req, d=0):
         if isinstance(req, STATE_MSGS):
-            return self.run_sub(self.state, req, d)
+            yield from self.run_sub(self.state, req, d)
         elif isinstance(req, LEADER_MSGS):
-            return self.run_sub(self.leader, req, d)
+            yield from self.run_sub(self.leader, req, d)
         elif isinstance(req, STATE_MSGS):
-            return self.run_sub(self.state, req, d)
+            yield from self.run_sub(self.state, req, d)
         elif isinstance(req, NET_MSGS):
-            return self.run_sub(self.net, req, d)
+            yield from self.run_sub(self.net, req, d)
         elif isinstance(req, Reply):
-            return req
+            yield req
         else:
             self._trace(f'Unroutable {req}')
             raise Unroutable(req)
 
-    def _trace(self, fn):
-        # x = True
-        x = False
-        if x:
-            print(*(fn()))
+    def _trace(self, *args):
+        # print(*args)
+        pass
 
     def run_sub(self, corout, ev, d=1):
-        self._trace(lambda: (' ' * d + 'BEGIN', ev))
+        self._trace(' ' * d + 'BEGIN', ev)
         rep = coroutiner(corout, ev)
-        self._trace(lambda: (' ' * (d + 1) + '>', rep))
+        self._trace(' ' * (d + 1) + '>', rep)
         prev_rep = None
 
         # When do we assume that
         while not isinstance(rep, Wait):
             prev_rep = rep
 
-            rep = coroutiner(corout, self.route(rep, d + 1))
-            self._trace(lambda: (' ' * (d + 1) + '|', rep))
+            # reqx = None
+            try:
+                zzz_iter = self.route(rep, d + 2)
+                rep2 = next(zzz_iter)
+                while not isinstance(rep2, Reply):
+                    rep3 = yield rep2
+                    rep2 = zzz_iter.send(rep3)
+                reqx = rep2
+                assert isinstance(reqx, Reply), reqx
+                self._trace(' ' * (d + 1) + '>', 'DONE', reqx)
+            except Unroutable as e:
+                self._trace(' ' * (d + 1) + '>', 'UNROUTABLE', rep)
+                reqx = yield rep
+                self._trace(' ' * (d + 1) + '>', 'UNROUTABLE RTN', reqx)
+
+            if not isinstance(reqx, Reply):
+                corout.throw(Unroutable(reqx))
+            # assert isinstance(reqx, Reply), reqx
+
+            rep = coroutiner(corout, reqx.payload)
+            self._trace(' ' * (d + 1) + '>', rep)
         assert isinstance(prev_rep, Reply)
 
-        self._trace(lambda: (' ' * d + 'END', prev_rep))
-        return prev_rep.payload
+        self._trace(' ' * d + 'END', prev_rep)
+        yield Reply(prev_rep.payload)
 
     def run(self):
         while True:
             ev = yield Wait()
 
             if isinstance(ev, Tick):
-                self.run_sub(self.acceptor, ev)
+                yield from self.run_sub(self.acceptor, ev)
             elif isinstance(ev, Packet):
                 if isinstance(ev.payload, PACKET_CLIENT):
-                    self.run_sub(self.clients, ev)
+                    yield from self.run_sub(self.clients, ev)
                 elif isinstance(ev.payload, PACKET_LEADER):
-                    self.run_sub(self.leader, ev)
+                    yield from self.run_sub(self.leader, ev)
                 elif isinstance(ev.payload, PACKET_ACCEPTOR):
-                    self.run_sub(self.acceptor, ev)
+                    yield from self.run_sub(self.acceptor, ev)
                 else:
                     assert False, ev
             elif isinstance(ev, STATE_EVENTS):
-                self.run_sub(self.clients, ev)
+                yield from self.run_sub(self.clients, ev)
             else:
                 assert False, ev
 
 
 def main():
-    q = Quorum(
-        [1, 2, 3, 4],
+    st = ReplicaState(
         0,
-        0
-    )
-
-    c = Configuration(
-        1,
-        3,
-        33,
-        10 * 33
+        0,
+        [1, 2, 3, 4],
+        [1, 2, 3, 4],
     )
 
     state = StateActor().run()
     clients = ClientsActor().run()
-    leader = LeaderCoroutine(q).run()
-    acceptor = AcceptorCoroutine(q, c).run()
+    leader = LeaderCoroutine(st).run()
+    acceptor = AcceptorCoroutine(st).run()
     net = NetActor().run()
 
     next(state)
@@ -139,11 +149,11 @@ def main():
     ).run()
 
     # print('S', next(m))
-    x = next(m)
 
     while True:
+        x = next(m)
 
-        assert isinstance(x, Wait), x
+        assert isinstance(x, Wait)
 
         x = m.send(
             Packet(
@@ -161,16 +171,15 @@ def main():
             )
         )
 
-        print(x)
+        while isinstance(x, ClientNetComm):
+            print(x)
+            x = m.send(Reply(True))
 
-        # while isinstance(x, ClientNetComm):
-        #     print(x)
-        #     x = m.send(Reply(True))
 
     print('>>>>>>>>', x)
 
     x = m.send(
-        Reply(True)
+       Reply(True)
     )
 
     print(next(m))

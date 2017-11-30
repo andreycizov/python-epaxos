@@ -7,19 +7,20 @@ from dsm.epaxos.replica.leader.main import LeaderCoroutine
 from dsm.epaxos.replica.main.ev import Tick, Wait
 from dsm.epaxos.replica.main.main import MainCoroutine
 from dsm.epaxos.replica.net.main import NetActor
+from dsm.epaxos.replica.quorum.ev import Configuration, Quorum
 from dsm.epaxos.replica.state.main import StateActor
 
 
 class Replica:
-    def __init__(self, i_state: ReplicaState):
-        self.state = i_state
+    def __init__(self, quorum: Quorum, config: Configuration, net_actor: NetActor):
+        self.quorum = quorum
         self.store = InstanceStore()
 
         state = StateActor().run()
         clients = ClientsActor().run()
-        leader = LeaderCoroutine(i_state).run()
-        acceptor = AcceptorCoroutine(i_state).run()
-        net = NetActor().run()
+        leader = LeaderCoroutine(quorum, ).run()
+        acceptor = AcceptorCoroutine(quorum, config).run()
+        net = net_actor.run()
 
         next(state)
         next(clients)
@@ -37,11 +38,8 @@ class Replica:
 
         assert isinstance(next(self.main), Wait)
 
-    
-
     def packet(self, p: Packet):
         self.main.send(p)
 
-    def tick(self):
-        self.state.tick()
-        self.main.send(Tick(self.state.ticks))
+    def tick(self, idx):
+        self.main.send(Tick(idx))

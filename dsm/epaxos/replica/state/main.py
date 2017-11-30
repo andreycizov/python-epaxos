@@ -1,6 +1,7 @@
+from dsm.epaxos.inst.state import Stage
 from dsm.epaxos.inst.store import InstanceStore
 from dsm.epaxos.replica.main.ev import Wait, Reply
-from dsm.epaxos.replica.state.ev import LoadCommandSlot, Load, Store
+from dsm.epaxos.replica.state.ev import LoadCommandSlot, Load, Store, InstanceState
 
 
 class StateActor:
@@ -16,7 +17,11 @@ class StateActor:
                 yield Reply(self.state.load(x.slot))
             elif isinstance(x, Store):
                 # todo: all stores modify timeouts
-                print('Store', x)
-                yield Reply(self.state.update(x.slot, x.state))
+                r = self.state.update(x.slot, x.state)
+                print(r)
+                if r.state.stage == Stage.Committed:
+                    print(r.state)
+                    yield InstanceState(x.slot, r)
+                yield Reply(r)
             else:
                 assert False, x

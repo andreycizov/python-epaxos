@@ -11,14 +11,14 @@ from dsm.epaxos.replica.corout import coroutiner, CoExit
 from dsm.epaxos.replica.leader.ev import LeaderStart
 from dsm.epaxos.replica.main.ev import Wait, Tick, Reply
 from dsm.epaxos.replica.net.ev import Receive
-from dsm.epaxos.replica.quorum.ev import Quorum
-from dsm.epaxos.replica.config import ReplicaState
+from dsm.epaxos.replica.quorum.ev import Quorum, Configuration
 
 logger = logging.getLogger(__name__)
 
 
 class AcceptorCoroutine(NamedTuple):
-    state: ReplicaState
+    quorum: Quorum
+    config: Configuration
     subs: Dict[Slot, Any] = {}
     waiting_for = {}
 
@@ -42,41 +42,48 @@ class AcceptorCoroutine(NamedTuple):
             x = yield Wait()
 
             if isinstance(x, packet.Packet) and isinstance(x.payload, PACKET_ACCEPTOR):
+                x = x.payload
+
                 slot = x.slot
 
                 if slot not in self.subs:
-                    self.subs[slot] = acceptor_single_ep(Quorum.from_state(self.state), slot)
+                    self.subs[slot] = acceptor_single_ep(self.quorum, slot)
 
                 if slot in self.waiting_for:
                     yield from self.run_sub(slot, Receive.from_waiting(self.waiting_for.pop(slot), x.payload))
 
                 yield Reply()
             elif isinstance(x, Tick):
-                checkpoint_id = self.state.ticks // (self.state.jiffies * self.state.checkpoint_each)
-                q_length = len(self.state.quorum_full)
-                r_idx = self.state.quorum_full.index(self.state.replica_id)
+                if x.id % self.config.checkpoint_each == 0:
+                    checkpoint_id = x.id // self.config.checkpoint_each
+                    r_idx = sorted(self.quorum.peers + [self.quorum.replica_id]).index(self.quorum.replica_id)
 
-                if checkpoint_id % q_length == r_idx:
-                    yield LeaderStart(
-                        Command(
-                            CommandID.create(),
-                            Checkpoint(
-                                checkpoint_id * q_length + r_idx
+                    q_length = self.quorum.full_size
+
+                    if checkpoint_id % q_length == r_idx:
+                        yield LeaderStart(
+                            Command(
+                                CommandID.create(),
+                                Checkpoint(
+                                    checkpoint_id * q_length + r_idx
+                                )
                             )
                         )
-                    )
 
-                last_tick = self.state.ticks
+                    last_tick = x.id
 
-                fmtd = '\n'.join(f'\t\t{x.name}: {y}' for x, y in sorted((y, len(list(x))) for y, x in
-                                                                         groupby(sorted([v.state.stage for k, v in
-                                                                                         self.replica.store.inst.items()]))))
+                    # fmtd = '\n'.join(f'\t\t{x.name}: {y}' for x, y in sorted((y, len(list(x))) for y, x in
+                    #                                                          groupby(sorted([v.state.stage for k, v in
+                    #                                                                          self.replica.store.inst.items()]))))
+                    #
+                    # fmtd3 = '\n'.join(
+                    #     f'\t\t{x}: {y}' for x, y in sorted([(k, v) for k, v in self.state.packet_counts.items()]))
 
-                fmtd3 = '\n'.join(
-                    f'\t\t{x}: {y}' for x, y in sorted([(k, v) for k, v in self.state.packet_counts.items()]))
+                    fmtd = ''
+                    fmtd3 = ''
 
-                logger.debug(
-                    f'\n{self.state.replica_id}\t{self.state.ticks}\n\tInstances:\n{fmtd}\n\tPackets:\n{fmtd3}')
+                    logger.debug(
+                        f'\n{self.quorum.replica_id}\t{x.id}\n\tInstances:\n{fmtd}\n\tPackets:\n{fmtd3}')
 
                 yield Reply()
             else:

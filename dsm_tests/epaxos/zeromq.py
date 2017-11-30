@@ -3,7 +3,8 @@ import signal
 from multiprocessing import Process
 from typing import List
 
-from dsm.epaxos.net.impl.generic.cli import ReplicaAddress, replica_client, replica_server
+from dsm.epaxos.net.impl.generic.cli import replica_client, replica_server
+from dsm.epaxos.replica.quorum.ev import ReplicaAddress
 from dsm.epaxos.net.impl.udp.client import UDPReplicaClient
 from dsm.epaxos.net.impl.udp.server import UDPReplicaServer
 # from dsm.epaxos.net.impl.zeromq.client import ZMQReplicaClient

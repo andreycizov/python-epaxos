@@ -24,6 +24,6 @@ class Store(NamedTuple):
         return f'Store({self.slot},{self.state})'
 
 
-class SlotState(NamedTuple):
+class InstanceState(NamedTuple):
     slot: Slot
     inst: InstanceStoreState

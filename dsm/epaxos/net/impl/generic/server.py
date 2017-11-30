@@ -1,21 +1,15 @@
 import contextlib
 import logging
-import uuid
 from datetime import datetime, timedelta
-from itertools import groupby
 from time import sleep
-from typing import NamedTuple, Dict, Tuple, Iterable
+from typing import Dict, Iterable
 
 from dsm.epaxos.net.packet import Packet
 from dsm.epaxos.replica.inst import Replica
-from dsm.epaxos.replica.config import ReplicaState
+from dsm.epaxos.replica.net.main import NetActor
+from dsm.epaxos.replica.quorum.ev import Configuration, Quorum, ReplicaAddress
 
 logger = logging.getLogger(__name__)
-
-
-class ReplicaAddress(NamedTuple):
-    replica_addr: str
-    client_addr: str
 
 
 @contextlib.contextmanager
@@ -26,6 +20,15 @@ def timeit(fn):
     fn(e - s)
 
 
+class Stats:
+    def __init__(self):
+        self.ticks = 0
+        self.total_exec = 0
+        self.total_timeouts = 0
+        self.total_sleep = 0
+        self.total_recv = 0
+
+
 class ReplicaServer:
     def __init__(
         self,
@@ -34,28 +37,21 @@ class ReplicaServer:
         peer_addr: Dict[int, ReplicaAddress],
     ):
         self.peer_addr = peer_addr
-
-        # self.channel_send, self.channel_receive = self.init(replica_id)
-
-        state = ReplicaState(
-            self.channel_send,
-            epoch,
+        self.quorum = Quorum(
+            [x for x in peer_addr.keys() if x != replica_id],
             replica_id,
-            list(peer_addr.keys()),
-            list(peer_addr.keys()),
-            True
+            epoch,
+            peer_addr
         )
 
-        self.state = state
-        self.replica = Replica(state)
+        self.config = Configuration()
 
-    @property
-    def channel_send(self):
-        assert False, ''
+        self.net_actor = self.build_net_actor()
+        self.replica = Replica(self.quorum, self.config, self.net_actor)
+        self.stats = Stats()
 
-    @property
-    def channel_receive(self):
-        assert False
+    def build_net_actor(self) -> NetActor:
+        raise NotImplementedError()
 
     def poll(self, min_wait) -> bool:
         """
@@ -76,7 +72,7 @@ class ReplicaServer:
         raise NotImplementedError()
 
     def main(self):
-        logger.info(f'Replica `{self.state.replica_id}` started.')
+        logger.info(f'Replica `{self.quorum.replica_id}` started.')
 
         last_tick_time = datetime.now()
         poll_delta = 0.
@@ -86,27 +82,27 @@ class ReplicaServer:
         pkts_sent = 0
 
         last_seen_tick = 0
-        cp_ech = 10
+        cp_ech = self.config.checkpoint_each
 
         start_time = datetime.now()
         has_slept = False
         should_poll = True
 
-        td_tick = timedelta(seconds=self.state.seconds_per_tick)
+        td_tick = timedelta(seconds=self.config.seconds_per_tick)
         next_tick_time = start_time + td_tick
 
-        logger.info(f'TPS=`{self.state.jiffies}` CP_EVER=`{self.state.jiffies * cp_ech}`')
+        logger.info(f'TPS=`{self.config.jiffies}` CP_EVER=`{cp_ech}`')
 
         ll_tick = last_tick - 1
 
         def upd_exec(x):
-            self.state.total_exec += x.total_seconds()
+            self.stats.total_exec += x.total_seconds()
 
         def upd_timeouts(x):
-            self.state.total_timeouts += x.total_seconds()
+            self.stats.total_timeouts += x.total_seconds()
 
         def upd_recv(x):
-            self.state.total_recv += x.total_seconds()
+            self.stats.total_recv += x.total_seconds()
 
         while True:
             loop_start_time = datetime.now()
@@ -122,23 +118,24 @@ class ReplicaServer:
                 poll_result = True
 
             loop_poll_time = datetime.now()
-            self.state.total_sleep += (loop_poll_time - loop_start_time).total_seconds()
+            self.stats.total_sleep += (loop_poll_time - loop_start_time).total_seconds()
 
             # print(self.state.ticks)
 
-            assert last_seen_tick == self.state.ticks or last_seen_tick == self.state.ticks - 1, (
-                last_seen_tick, self.state.ticks)
-            last_seen_tick = self.state.ticks
+            assert last_seen_tick == self.stats.ticks or last_seen_tick == self.stats.ticks - 1, (
+                last_seen_tick, self.stats.ticks)
+            last_seen_tick = self.stats.ticks
 
             # print(self.state.ticks)
 
             if loop_poll_time > next_tick_time:
-                self.replica.tick()
+                self.replica.tick(self.stats.ticks)
                 next_tick_time = next_tick_time + td_tick
+                self.stats.ticks += 1
 
             pkts_sent += self.send()
 
-            if (datetime.now() - start_time).total_seconds() > 20 and self.state.replica_id == 5 and not has_slept:
+            if (datetime.now() - start_time).total_seconds() > 20 and self.quorum.replica_id == 5 and not has_slept:
                 logger.info('Sleeping')
                 sleep(40)
                 logger.info('Sleept')

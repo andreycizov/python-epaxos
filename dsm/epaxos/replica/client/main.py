@@ -4,7 +4,7 @@ from dsm.epaxos.net.packet import Packet
 from dsm.epaxos.replica.leader.ev import LeaderStart
 from dsm.epaxos.replica.main.ev import Wait, Reply
 from dsm.epaxos.replica.net.ev import Send
-from dsm.epaxos.replica.state.ev import LoadCommandSlot, SlotState
+from dsm.epaxos.replica.state.ev import LoadCommandSlot, InstanceState
 
 
 class ClientsActor:
@@ -24,8 +24,6 @@ class ClientsActor:
 
                 slot = yield LoadCommandSlot(x.payload.command.id)
 
-                print('ZZZZ', slot)
-
                 if slot is None:
                     slot = yield LeaderStart(x.payload.command)
 
@@ -37,7 +35,7 @@ class ClientsActor:
                 self.peers[x.origin].append(slot)
 
                 yield Reply('ACK')
-            elif isinstance(x, SlotState):
+            elif isinstance(x, InstanceState):
                 if x.slot in self.clients and x.inst.state.stage == Stage.Committed:
                     yield Send(
                         self.clients[x.slot],

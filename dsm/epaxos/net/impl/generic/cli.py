@@ -14,7 +14,8 @@ from datetime import datetime
 
 from dsm.epaxos.cmd.state import Command, Mutator
 from dsm.epaxos.net.impl.generic.client import ReplicaClient
-from dsm.epaxos.net.impl.generic.server import ReplicaAddress, ReplicaServer
+from dsm.epaxos.net.impl.generic.server import ReplicaServer
+from dsm.epaxos.replica.quorum.ev import ReplicaAddress
 
 logger = logging.getLogger(__name__)
 
@@ -60,12 +61,12 @@ def replica_server(cls: ClassVar[ReplicaServer], epoch: int, replica_id: int, re
 
     with cls(epoch, replica_id, replicas) as server:
         try:
-            server.run_sub()
+            server.run()
         except:
             logger.exception(f'Server {replica_id}')
         finally:
             tot_time = datetime.now() - start_time
-            logger.info(f'{replica_id} {server.state.total_sleep} {server.state.total_timeouts} {server.state.total_exec} {server.state.total_recv} {tot_time.total_seconds()}')
+            logger.info(f'{replica_id} {server.stats.total_sleep} {server.stats.total_timeouts} {server.stats.total_exec} {server.stats.total_recv} {tot_time.total_seconds()}')
             if profile:
                 pr.disable()
                 pr.dump_stats(f'{replica_id}.profile')
@@ -76,7 +77,7 @@ def replica_client(cls: ClassVar[ReplicaClient], peer_id: int, replicas: Dict[in
         cli_logger()
 
         TOTAL = 20000
-        EACH = 200
+        EACH = 1
         OP_CP = 1000
         LAT_BUF = 10
 

@@ -3,7 +3,7 @@ import struct
 from typing import Dict
 from urllib.parse import urlparse
 
-from dsm.epaxos.net.impl.generic.server import ReplicaAddress
+from dsm.epaxos.replica.quorum.ev import ReplicaAddress
 from dsm.epaxos.net.packet import Packet
 from dsm.serializer import serialize_json, deserialize_json
 

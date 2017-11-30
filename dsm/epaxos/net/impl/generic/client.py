@@ -3,7 +3,8 @@ from datetime import datetime, timedelta
 from typing import Dict
 
 from dsm.epaxos.cmd.state import Command
-from dsm.epaxos.net.impl.generic.server import ReplicaAddress, logger
+from dsm.epaxos.net.impl.generic.server import logger
+from dsm.epaxos.replica.quorum.ev import ReplicaAddress
 
 
 class ReplicaClient:
