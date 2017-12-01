@@ -51,8 +51,10 @@ class AcceptorCoroutine:
             req: Receive
             self.waiting_for[slot] = req.type
         except CoExit:
-            del self.waiting_for[slot]
-            del self.subs[slot]
+            if slot in self.waiting_for:
+                del self.waiting_for[slot]
+            if slot in self.subs:
+                del self.subs[slot]
         # except BaseException as e:
         #     corout.throw(e)
 
@@ -85,6 +87,12 @@ class AcceptorCoroutine:
                 if tick not in self.timeouts_slots:
                     self.timeouts_slots[tick] = {}
                 self.timeouts_slots[tick][x.slot] = True
+
+            if x.inst.state.stage >= Stage.Committed:
+                if x.slot in self.waiting_for:
+                    del self.waiting_for[x.slot]
+                if x.slot in self.subs:
+                    del self.subs[x.slot]
 
         elif isinstance(x, Tick):
             self.tick = x.id
@@ -130,11 +138,11 @@ class AcceptorCoroutine:
                 # fmtd3 = '\n'.join(
                 #     f'\t\t{x}: {y}' for x, y in sorted([(k, v) for k, v in self.state.packet_counts.items()]))
 
-                fmtd = ''
-                fmtd3 = ''
+                # fmtd = ''
+                # fmtd3 = ''
 
-                logger.debug(
-                    f'\n{self.quorum.replica_id}\t{x.id}\n\tInstances:\n{fmtd}\n\tPackets:\n{fmtd3}')
+                # logger.debug(
+                #     f'\n{self.quorum.replica_id}\t{x.id}\n\tInstances:\n{fmtd}\n\tPackets:\n{fmtd3}')
         else:
             assert False, x
 

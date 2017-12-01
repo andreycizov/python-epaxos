@@ -41,7 +41,7 @@ class KeyedDepsCache:
         for x in mut.keys:
             inter_val = self.store.get(x)
 
-            if inter_val and inter_val != slot:
+            if inter_val and inter_val.slot != slot:
                 r.append(inter_val.slot)
 
             self.store[x] = CacheState(

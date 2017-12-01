@@ -1,3 +1,4 @@
+import logging
 from typing import NamedTuple, Dict, Optional, Tuple
 from uuid import UUID
 
@@ -76,7 +77,7 @@ class InstanceStore:
         if new.state.stage < old.state.stage:
             raise IncorrectStage(old, new)
 
-        if old.state.command is not None and old.state.command != new.state.command:
+        if old.state.stage > Stage.PreAccepted and old.state.command is not None and old.state.command != new.state.command:
             raise IncorrectCommand(old, new)
 
         if new.state.stage == Stage.PreAccepted and new.state.command:

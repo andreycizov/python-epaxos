@@ -93,7 +93,7 @@ def replica_client(cls: ClassVar[ReplicaClient], peer_id: int, replicas: Dict[in
                     uuid4(),
                     Mutator(
                         'SET',
-                        [random.randint(1, 10000000000)]
+                        [random.randint(1, 10)]
                     )
                 )
                 lat, _ = client.request(command)

@@ -42,6 +42,7 @@ class MainCoroutine(NamedTuple):
     leader: None
     acceptor: None
     net: None
+    executor: None
 
     trace: bool = False
 
@@ -57,6 +58,8 @@ class MainCoroutine(NamedTuple):
         elif isinstance(req, STATE_EVENTS):
             self.run_sub(self.clients, req, d)
             self.run_sub(self.acceptor, req, d)
+            self.run_sub(self.leader, req, d)
+            self.run_sub(self.executor, req, d)
             return Reply(None)
         elif isinstance(req, Reply):
             return req
@@ -98,6 +101,7 @@ class MainCoroutine(NamedTuple):
         if isinstance(ev, Tick):
             self.run_sub(self.acceptor, ev, 0, False)
             self.run_sub(self.state, ev, 0, False)
+            self.run_sub(self.net, ev, 0, False)
         elif isinstance(ev, Packet):
             if isinstance(ev.payload, PACKET_CLIENT):
                 self.run_sub(self.clients, ev)

@@ -40,14 +40,17 @@ def create_bind(addr, buff_size=2 * 1000 * 1000):
     sock.bind(_addr_conv(addr))
     sock.settimeout(0)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, buff_size)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, buff_size)
     return sock
 
 
-def create_socket():
+def create_socket(buff_size=2 * 1000 * 1000):
     sock_send = socket.socket(
         socket.AF_INET,  # Internet
         socket.SOCK_DGRAM
     )
+    sock_send.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, buff_size)
+    sock_send.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, buff_size)
     return sock_send
 
 

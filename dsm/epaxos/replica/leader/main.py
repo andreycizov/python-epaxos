@@ -1,4 +1,4 @@
-from dsm.epaxos.inst.state import Slot
+from dsm.epaxos.inst.state import Slot, Stage
 from dsm.epaxos.net import packet
 from dsm.epaxos.net.packet import PACKET_LEADER
 from dsm.epaxos.replica.leader.ev import LeaderStart, LeaderExplicitPrepare, LeaderStop
@@ -7,6 +7,7 @@ from dsm.epaxos.replica.leader.sub import leader_client_request, leader_explicit
 from dsm.epaxos.replica.main.ev import Wait, Reply
 from dsm.epaxos.replica.net.ev import Receive
 from dsm.epaxos.replica.quorum.ev import Quorum
+from dsm.epaxos.replica.state.ev import InstanceState
 
 
 class LeaderCoroutine:
@@ -37,7 +38,8 @@ class LeaderCoroutine:
         except CoExit:
             if slot in self.waiting_for:
                 del self.waiting_for[slot]
-            del self.subs[slot]
+            if slot in self.subs:
+                del self.subs[slot]
         # except BaseException as e:
         #     corout.throw(e)
 
@@ -48,6 +50,13 @@ class LeaderCoroutine:
             if slot in self.waiting_for:
                 yield from self.run_sub(slot, (x.origin, Receive.from_waiting(self.waiting_for.pop(slot), x.payload)))
 
+            yield Reply()
+        elif isinstance(x, InstanceState):
+            if x.inst.state.stage >= Stage.Committed:
+                if x.slot in self.waiting_for:
+                    del self.waiting_for[x.slot]
+                if x.slot in self.subs:
+                    del self.subs[x.slot]
             yield Reply()
         elif isinstance(x, LeaderStart):
             slot = Slot(self.quorum.replica_id, self.next_instance_id)

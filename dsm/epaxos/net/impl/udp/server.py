@@ -1,6 +1,7 @@
 import logging
 import random
 import select
+from collections import defaultdict
 
 from dsm.epaxos.net.impl.generic.server import ReplicaServer
 from dsm.epaxos.net.impl.udp.util import _recv_parse_buffer, create_bind, create_socket, deserialize, serialize, \
@@ -12,12 +13,21 @@ from dsm.epaxos.replica.quorum.ev import Quorum
 
 logger = logging.getLogger(__name__)
 
-DROP_RATE = 0.03
+DROP_RATE = 0.01
+
+
+class NetStats:
+    def __init__(self):
+        self.send = defaultdict(int)
+        self.recv = defaultdict(int)
+        self.traffic_send = 0
+        self.traffic_recv = 0
 
 
 class UDPNetActor(NetActor):
     def __init__(self, quorum: Quorum):
         super().__init__()
+        self.net_stats: NetStats
         self.quorum = quorum
         self.socket = create_socket()
         self.clients = {}
@@ -41,10 +51,16 @@ class UDPNetActor(NetActor):
 
         # print('>>>>>>>>>', self.quorum.replica_id, s.dest, packet)
 
+
+        body = serialize(packet)
+
+        self.net_stats.send[packet.type] += 1
+        self.net_stats.traffic_send += len(body)
+
+
         if random.random() < DROP_RATE:
             return
 
-        body = serialize(packet)
         try:
             self.socket.sendto(body, dst)
         except OSError:
@@ -57,12 +73,15 @@ class UDPNetActor(NetActor):
 
 class UDPReplicaServer(ReplicaServer):
     def __init__(self, *args, **kwargs):
+        self.net_stats = NetStats()
         super().__init__(*args, **kwargs)
 
         self.socket_server = create_bind(self.peer_addr[self.quorum.replica_id].replica_addr)
 
     def build_net_actor(self) -> NetActor:
-        return UDPNetActor(self.quorum)
+        r = UDPNetActor(self.quorum)
+        r.net_stats = self.net_stats
+        return r
 
     def poll(self, min_wait):
         r, _, _ = select.select([self.socket_server], [], [], min_wait)
@@ -79,6 +98,9 @@ class UDPReplicaServer(ReplicaServer):
 
             if random.random() < DROP_RATE:
                 continue
+
+            self.net_stats.recv[x.type] += 1
+            self.net_stats.traffic_recv += len(body)
 
             # print('<<<<<<<<', self.quorum.replica_id, x)
 

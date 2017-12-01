@@ -162,7 +162,7 @@ def leader_explicit_prepare(q: Quorum, slot: Slot, reason=None):
             InstanceStoreState(
                 ballot,
                 State(
-                    Stage.PreAccepted,
+                    Stage.Accepted,
                     reply.command,
                     reply.seq,
                     reply.deps

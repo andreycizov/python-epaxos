@@ -3,6 +3,7 @@ from dsm.epaxos.net.packet import Packet
 from dsm.epaxos.replica.acceptor.main import AcceptorCoroutine
 from dsm.epaxos.replica.client.main import ClientsActor
 from dsm.epaxos.replica.config import ReplicaState
+from dsm.epaxos.replica.executor.main import ExecutorActor
 from dsm.epaxos.replica.leader.main import LeaderCoroutine
 from dsm.epaxos.replica.main.ev import Tick, Wait
 from dsm.epaxos.replica.main.main import MainCoroutine
@@ -16,11 +17,12 @@ class Replica:
         self.quorum = quorum
         self.store = InstanceStore()
 
-        state = StateActor(self.quorum)
+        state = StateActor(self.quorum, self.store)
         clients = ClientsActor()
         leader = LeaderCoroutine(quorum, )
         acceptor = AcceptorCoroutine(quorum, config)
         net = net_actor
+        executor = ExecutorActor(self.quorum, self.store)
 
         self.main = MainCoroutine(
             state,
@@ -28,6 +30,7 @@ class Replica:
             leader,
             acceptor,
             net,
+            executor,
             trace=self.quorum.replica_id == 1
         )
 
