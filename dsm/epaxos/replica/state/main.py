@@ -1,7 +1,5 @@
 import logging
 from itertools import groupby
-from turtledemo.clock import tick
-from typing import NamedTuple
 
 from dsm.epaxos.inst.state import Stage
 from dsm.epaxos.inst.store import InstanceStore
