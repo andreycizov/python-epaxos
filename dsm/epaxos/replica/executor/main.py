@@ -161,7 +161,7 @@ class ExecutorActor:
                     #     self.log(lambda: f'{self.quorum.replica_id}\tDPHX\t{self.dph.ccs}\n')
                     for checkpoint in self.build_execute_pending(unlocked_list):
                         xx = self.store.load(checkpoint).inst
-                        yield CheckpointEvent({x.replica_id: x for x in xx.state.deps})
+                        yield CheckpointEvent(checkpoint, {x.replica_id: x for x in xx.state.deps})
 
         else:
             assert False, x

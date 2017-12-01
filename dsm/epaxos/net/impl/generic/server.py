@@ -135,11 +135,11 @@ class ReplicaServer:
 
             pkts_sent += self.send()
 
-            if (datetime.now() - start_time).total_seconds() > 20 and self.quorum.replica_id == 5 and not has_slept:
-                logger.info('Sleeping')
-                sleep(40)
-                logger.info('Sleept')
-                has_slept = True
+            # if (datetime.now() - start_time).total_seconds() > 20 and self.quorum.replica_id == 5 and not has_slept:
+            #     logger.info('Sleeping')
+            #     sleep(40)
+            #     logger.info('Sleept')
+            #     has_slept = True
 
             if poll_result:
                 rcvd = 0

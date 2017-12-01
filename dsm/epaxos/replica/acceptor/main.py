@@ -5,6 +5,7 @@ from typing import NamedTuple, Dict, Any, List
 
 from dsm.epaxos.cmd.state import Command, CommandID, Checkpoint
 from dsm.epaxos.inst.state import Slot, Stage
+from dsm.epaxos.inst.store import between_checkpoints
 from dsm.epaxos.net import packet
 from dsm.epaxos.net.packet import PACKET_ACCEPTOR
 from dsm.epaxos.replica.acceptor.getsizeof import getsize
@@ -14,7 +15,7 @@ from dsm.epaxos.replica.leader.ev import LeaderStart, LeaderExplicitPrepare
 from dsm.epaxos.replica.main.ev import Wait, Tick, Reply
 from dsm.epaxos.replica.net.ev import Receive
 from dsm.epaxos.replica.quorum.ev import Quorum, Configuration
-from dsm.epaxos.replica.state.ev import InstanceState
+from dsm.epaxos.replica.state.ev import InstanceState, CheckpointEvent
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,8 @@ class AcceptorCoroutine:
         self.waiting_for = waiting_for
         self.timeouts_slots = timeouts_slots
         self.slots_timeouts = slots_timeouts
+        self.last_cp = None
+        self.cp = {}
 
         self.tick = 0
 
@@ -98,9 +101,6 @@ class AcceptorCoroutine:
         elif isinstance(x, Tick):
             self.tick = x.id
 
-            if self.tick % 100 == 0:
-                print(self.quorum.replica_id, self.timeouts_slots)
-
             # print(self.quorum.replica_id, self.tick)
             if x.id in self.timeouts_slots:
                 to_start = []
@@ -148,6 +148,24 @@ class AcceptorCoroutine:
 
                 # logger.debug(
                 #     f'\n{self.quorum.replica_id}\t{x.id}\n\tInstances:\n{fmtd}\n\tPackets:\n{fmtd3}')
+        elif isinstance(x, CheckpointEvent):
+            if self.last_cp:
+                new_cp = {**self.cp, **self.last_cp.at}
+                ctr = 0
+
+                for slot in between_checkpoints(self.cp, new_cp):
+
+                    if slot in self.subs:
+                        ctr += 1
+                        del self.subs[slot]
+                    if slot in self.waiting_for:
+                        ctr += 1
+                        del self.waiting_for[slot]
+
+                self.cp = new_cp
+                logger.error(f'{self.quorum.replica_id} cleaned old things between {ctr}: {self.cp}')
+
+            self.last_cp = x
         else:
             assert False, x
 

@@ -25,6 +25,7 @@ class StateActor:
     def __init__(self, quorum: Quorum, store: InstanceStore):
         self.quorum = quorum
         self.store = store
+        self.prev_cp = None
 
         self.log = Log(f'state-{self.quorum.replica_id}.log')
 
@@ -67,6 +68,9 @@ class StateActor:
             yield InstanceState(x.slot, new)
             yield Reply(new)
         elif isinstance(x, CheckpointEvent):
-            pass
+            if self.prev_cp:
+                self.store.set_cp(self.prev_cp.at)
+            self.prev_cp = x
+            yield Reply(None)
         else:
             assert False, x

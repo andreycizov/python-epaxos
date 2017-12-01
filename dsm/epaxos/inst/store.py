@@ -16,7 +16,7 @@ class InstanceStoreState(NamedTuple):
 
 
 class TransitionException(Exception):
-    def __init__(self, curr_inst: InstanceStoreState, new_inst: InstanceStoreState):
+    def __init__(self, curr_inst: Optional[InstanceStoreState], new_inst: Optional[InstanceStoreState]):
         self.inst = curr_inst
 
 
@@ -41,6 +41,15 @@ class LoadResult(NamedTuple):
     inst: InstanceStoreState
 
 
+def between_checkpoints(old, new):
+    for x in new.keys():
+        max_slot = new.get(x, Slot(x, 0))
+        low_slot = old.get(x, Slot(x, 0))
+
+        for y in range(low_slot.instance_id, max_slot.instance_id):
+            yield Slot(x, y)
+
+
 class InstanceStore:
     def __init__(self):
         self.inst = {}  # type: Dict[Slot, InstanceStoreState]
@@ -49,14 +58,18 @@ class InstanceStore:
         self.cp = {}  # type: Dict[int, Slot]
 
     def set_cp(self, cp: Dict[int, Slot]):
+        new_cp = {**self.cp, **cp}
 
+        for slot in between_checkpoints(self.cp, new_cp):
+            if slot in self.inst:
+                del self.inst[slot]
 
         self.cp = cp
-        # todo: clean all instances lower than that.
-
-
 
     def load(self, slot: Slot):
+        if slot < self.cp.get(slot.replica_id, Slot(slot.replica_id, -1)):
+            raise SlotTooOld(None, None)
+
         r = self.inst.get(slot)
         exists = True
 

@@ -1,5 +1,5 @@
 from dsm.epaxos.inst.state import Slot, State, Stage
-from dsm.epaxos.inst.store import InstanceStoreState, IncorrectStage, IncorrectBallot
+from dsm.epaxos.inst.store import InstanceStoreState, IncorrectStage, IncorrectBallot, SlotTooOld
 from dsm.epaxos.net import packet
 from dsm.epaxos.replica.leader.ev import LeaderStop
 from dsm.epaxos.replica.net.ev import Send, Receive
@@ -72,6 +72,8 @@ def acceptor_pre_accept(q: Quorum, slot: Slot, peer: int, pre_accept: packet.Pre
     except IncorrectBallot as e:
         yield Send(peer, packet.PreAcceptResponseNack(slot, e.inst.ballot, 'BALLOT'))
         return
+    except SlotTooOld:
+        yield Send(peer, packet.DivergedResponse(slot))
 
 
 def acceptor_accept(q: Quorum, slot: Slot, peer: int, accept: packet.AcceptRequest):
@@ -103,6 +105,8 @@ def acceptor_accept(q: Quorum, slot: Slot, peer: int, accept: packet.AcceptReque
     except IncorrectBallot as e:
         yield Send(peer, packet.AcceptResponseNack(slot, e.inst.ballot))
         return
+    except SlotTooOld:
+        yield Send(peer, packet.DivergedResponse(slot))
 
 
 def acceptor_commit(q: Quorum, slot: Slot, peer: int, commit: packet.CommitRequest):
@@ -132,29 +136,34 @@ def acceptor_commit(q: Quorum, slot: Slot, peer: int, commit: packet.CommitReque
         return
     except IncorrectStage as e:
         return
+    except SlotTooOld:
+        yield Send(peer, packet.DivergedResponse(slot))
 
 
 def acceptor_prepare(q: Quorum, slot: Slot, peer: int, prepare: packet.PrepareRequest):
-    inst = yield Load(slot)  # type: InstanceStoreState
+    try:
+        inst = yield Load(slot)  # type: InstanceStoreState
+    except SlotTooOld:
+        yield Send(peer, packet.DivergedResponse(slot))
+    else:
+        if prepare.ballot < inst.ballot:
+            yield Send(
+                peer,
+                packet.PrepareResponseNack(
+                    slot,
+                    inst.ballot
+                )
+            )
+            return
 
-    if prepare.ballot < inst.ballot:
         yield Send(
             peer,
-            packet.PrepareResponseNack(
+            packet.PrepareResponseAck(
                 slot,
-                inst.ballot
+                prepare.ballot,
+                inst.state.command,
+                inst.state.seq,
+                inst.state.deps,
+                inst.state.stage
             )
         )
-        return
-
-    yield Send(
-        peer,
-        packet.PrepareResponseAck(
-            slot,
-            prepare.ballot,
-            inst.state.command,
-            inst.state.seq,
-            inst.state.deps,
-            inst.state.stage
-        )
-    )

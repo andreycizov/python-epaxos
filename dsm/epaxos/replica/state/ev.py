@@ -30,4 +30,5 @@ class InstanceState(NamedTuple):
 
 
 class CheckpointEvent(NamedTuple):
+    slot: Slot
     at: Dict[int, Slot]

@@ -1,4 +1,7 @@
+import logging
+
 from dsm.epaxos.inst.state import Slot, Stage
+from dsm.epaxos.inst.store import between_checkpoints
 from dsm.epaxos.net import packet
 from dsm.epaxos.net.packet import PACKET_LEADER
 from dsm.epaxos.replica.leader.ev import LeaderStart, LeaderExplicitPrepare, LeaderStop
@@ -7,7 +10,9 @@ from dsm.epaxos.replica.leader.sub import leader_client_request, leader_explicit
 from dsm.epaxos.replica.main.ev import Wait, Reply
 from dsm.epaxos.replica.net.ev import Receive
 from dsm.epaxos.replica.quorum.ev import Quorum
-from dsm.epaxos.replica.state.ev import InstanceState
+from dsm.epaxos.replica.state.ev import InstanceState, CheckpointEvent
+
+logger = logging.getLogger('leader')
 
 
 class LeaderCoroutine:
@@ -16,6 +21,9 @@ class LeaderCoroutine:
         self.subs = {}  # type: GEN_T
         self.waiting_for = {}  # type: Dict[Slot, T_sub_payload]
         self.next_instance_id = 0
+
+        self.cp = {}
+        self.last_cp = None
 
     def begin_explicit_prepare(self, slot, to_exec=True, reason=None):
         self.store.file_log.write(
@@ -79,5 +87,24 @@ class LeaderCoroutine:
 
             yield from self.run_sub(x.slot)
             yield Reply(prev)
+        elif isinstance(x, CheckpointEvent):
+            if self.last_cp:
+                new_cp = {**self.cp, **self.last_cp.at}
+
+                ctr = 0
+
+                for slot in between_checkpoints(self.cp, new_cp):
+                    if slot in self.subs:
+                        ctr += 1
+                        del self.subs[slot]
+                    if slot in self.waiting_for:
+                        ctr += 1
+                        del self.waiting_for[slot]
+
+                self.cp = new_cp
+                logger.error(f'{self.quorum.replica_id} cleaned old things between {ctr}: {self.cp}')
+
+            self.last_cp = x
+            yield Reply()
         else:
             assert False, x

@@ -65,6 +65,7 @@ class MainCoroutine(NamedTuple):
         elif isinstance(req, CHECKPOINT_EVENTS):
             self.run_sub(self.acceptor, req, d)
             self.run_sub(self.state, req, d)
+            self.run_sub(self.leader, req, d)
         elif isinstance(req, Reply):
             return req
         else:
