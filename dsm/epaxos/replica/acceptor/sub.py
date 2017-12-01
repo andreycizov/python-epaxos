@@ -112,7 +112,7 @@ def acceptor_commit(q: Quorum, slot: Slot, peer: int, commit: packet.CommitReque
             InstanceStoreState(
                 commit.ballot,
                 State(
-                    Stage.Accepted,
+                    Stage.Committed,
                     commit.command,
                     commit.seq,
                     commit.deps

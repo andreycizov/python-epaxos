@@ -14,6 +14,9 @@ class Slot(NamedTuple):
     def __repr__(self):
         return f'{self.__class__.__name__}({self.replica_id},{self.instance_id})'
 
+    def next(self):
+        return Slot(self.replica_id, self.instance_id + 1)
+
     @classmethod
     def serializer(cls, sub_ser):
         return lambda obj: [obj.replica_id, obj.instance_id]

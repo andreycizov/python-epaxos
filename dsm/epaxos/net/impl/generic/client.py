@@ -43,6 +43,8 @@ class ReplicaClient:
 
         start = datetime.now()
 
+        self.connect()
+
         while True:
             self.send(command)
             retries = retries_max

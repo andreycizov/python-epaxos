@@ -7,6 +7,7 @@ from dsm.epaxos.cmd.state import Command, CommandID, Checkpoint
 from dsm.epaxos.inst.state import Slot, Stage
 from dsm.epaxos.net import packet
 from dsm.epaxos.net.packet import PACKET_ACCEPTOR
+from dsm.epaxos.replica.acceptor.getsizeof import getsize
 from dsm.epaxos.replica.acceptor.sub import acceptor_single_ep
 from dsm.epaxos.replica.corout import coroutiner, CoExit
 from dsm.epaxos.replica.leader.ev import LeaderStart, LeaderExplicitPrepare
@@ -97,13 +98,14 @@ class AcceptorCoroutine:
         elif isinstance(x, Tick):
             self.tick = x.id
 
+            if self.tick % 100 == 0:
+                print(self.quorum.replica_id, self.timeouts_slots)
+
             # print(self.quorum.replica_id, self.tick)
             if x.id in self.timeouts_slots:
                 to_start = []
                 for slot, truth in self.timeouts_slots[x.id].items():
-                    if truth:
-                        # print(self.quorum.replica_id, 'TIMEOUT', x.id, slot)
-                        to_start.append(slot)
+                    to_start.append(slot)
                     del self.slots_timeouts[slot]
                 del self.timeouts_slots[x.id]
 
@@ -120,13 +122,16 @@ class AcceptorCoroutine:
                 q_length = self.quorum.full_size
 
                 if checkpoint_id % q_length == r_idx:
-                    yield LeaderStart(
-                        Command(
-                            CommandID.create(),
-                            Checkpoint(
-                                checkpoint_id * q_length + r_idx
-                            )
+                    import sys
+                    cp_cmd = Command(
+                        CommandID.create(),
+                        Checkpoint(
+                            checkpoint_id * q_length + r_idx
                         )
+                    )
+                    print('SIZEOF', getsize(cp_cmd))
+                    yield LeaderStart(
+                        cp_cmd
                     )
 
                 last_tick = x.id

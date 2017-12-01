@@ -32,6 +32,10 @@ class IncorrectCommand(TransitionException):
     pass
 
 
+class SlotTooOld(TransitionException):
+    pass
+
+
 class LoadResult(NamedTuple):
     exists: bool
     inst: InstanceStoreState
@@ -42,6 +46,15 @@ class InstanceStore:
         self.inst = {}  # type: Dict[Slot, InstanceStoreState]
         self.cmd_to_slot = {}  # type: Dict[CommandID, Slot]
         self.deps_cache = KeyedDepsCache()
+        self.cp = {}  # type: Dict[int, Slot]
+
+    def set_cp(self, cp: Dict[int, Slot]):
+
+
+        self.cp = cp
+        # todo: clean all instances lower than that.
+
+
 
     def load(self, slot: Slot):
         r = self.inst.get(slot)

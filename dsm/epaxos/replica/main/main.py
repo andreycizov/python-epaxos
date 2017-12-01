@@ -17,13 +17,14 @@ from dsm.epaxos.replica.net.ev import Send
 from dsm.epaxos.replica.net.main import NetActor
 from dsm.epaxos.replica.config import ReplicaState
 from dsm.epaxos.replica.quorum.ev import Quorum, Configuration
-from dsm.epaxos.replica.state.ev import LoadCommandSlot, Load, Store, InstanceState
+from dsm.epaxos.replica.state.ev import LoadCommandSlot, Load, Store, InstanceState, CheckpointEvent
 from dsm.epaxos.replica.state.main import StateActor
 
 logger = logging.getLogger(__name__)
 
 STATE_MSGS = (LoadCommandSlot, Load, Store)
 STATE_EVENTS = (InstanceState,)
+CHECKPOINT_EVENTS = (CheckpointEvent,)
 LEADER_MSGS = (LeaderStart, LeaderStop, LeaderExplicitPrepare)
 NET_MSGS = (Send,)
 
@@ -61,6 +62,9 @@ class MainCoroutine(NamedTuple):
             self.run_sub(self.leader, req, d)
             self.run_sub(self.executor, req, d)
             return Reply(None)
+        elif isinstance(req, CHECKPOINT_EVENTS):
+            self.run_sub(self.acceptor, req, d)
+            self.run_sub(self.state, req, d)
         elif isinstance(req, Reply):
             return req
         else:
@@ -113,6 +117,9 @@ class MainCoroutine(NamedTuple):
                 assert False, ev
         elif isinstance(ev, STATE_EVENTS):
             self.run_sub(self.clients, ev)
+            self.run_sub(self.acceptor, ev)
+            self.run_sub(self.leader, ev)
+            self.run_sub(self.executor, ev)
         else:
             assert False, ev
 

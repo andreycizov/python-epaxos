@@ -7,15 +7,26 @@ from dsm.epaxos.inst.state import Stage
 from dsm.epaxos.inst.store import InstanceStore
 from dsm.epaxos.replica.main.ev import Wait, Reply, Tick
 from dsm.epaxos.replica.quorum.ev import Quorum
-from dsm.epaxos.replica.state.ev import LoadCommandSlot, Load, Store, InstanceState
+from dsm.epaxos.replica.state.ev import LoadCommandSlot, Load, Store, InstanceState, CheckpointEvent
 
 logger = logging.getLogger('state')
+
+
+class Log:
+    def __init__(self, filename):
+        self._log = open(filename, 'w+')
+
+    def __call__(self, fn=lambda: ''):
+        self._log.write(fn())
+        self._log.flush()
 
 
 class StateActor:
     def __init__(self, quorum: Quorum, store: InstanceStore):
         self.quorum = quorum
         self.store = store
+
+        self.log = Log(f'state-{self.quorum.replica_id}.log')
 
     def event(self, x):
         if isinstance(x, Tick):
@@ -38,13 +49,15 @@ class StateActor:
             # todo: all stores modify timeouts
             old, new = self.store.update(x.slot, x.inst)
 
+            self.log(lambda: f'{self.quorum.replica_id}\t{x.slot}\t{new}\n')
+
             deps_comm = []
             for d in new.state.deps:
                 r = self.store.load(d)
 
                 if not r.exists:
-                    self.store.update(d, r.inst)
-                    yield InstanceState(d, r.inst)
+                    r_old, r_new = self.store.update(d, r.inst)
+                    yield InstanceState(d, r_new)
 
                 deps_comm.append(r.inst.state.stage == Stage.Committed)
 
@@ -53,5 +66,7 @@ class StateActor:
 
             yield InstanceState(x.slot, new)
             yield Reply(new)
+        elif isinstance(x, CheckpointEvent):
+            pass
         else:
             assert False, x

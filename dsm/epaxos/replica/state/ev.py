@@ -1,4 +1,4 @@
-from typing import NamedTuple
+from typing import NamedTuple, Dict
 
 from dsm.epaxos.cmd.state import CommandID
 from dsm.epaxos.inst.state import Slot
@@ -27,3 +27,7 @@ class Store(NamedTuple):
 class InstanceState(NamedTuple):
     slot: Slot
     inst: InstanceStoreState
+
+
+class CheckpointEvent(NamedTuple):
+    at: Dict[int, Slot]
