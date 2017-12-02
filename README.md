@@ -4,7 +4,7 @@ Playing with the epaxos before transferring this to a more high-performing langu
 
 ### What is done
 
- - An working agreement protocol as described in the paper
+ - A working agreement protocol as described in the paper
  - Checkpointing
  - Purges of committed instances given that they have been agreed on in the previous version
  - Divergence errors - tell a replica we do not accept commands younger than the last checkpoint
