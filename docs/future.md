@@ -1,3 +1,30 @@
+2017-12-31 19:01 Checkpoints `tags(slots)`
+-------
+References:
+ - `ref(cmd_id_slot_id)`
+
+What are we trying to solve?
+
+Issues:
+ - `q(a)` How do we know that all of the instances that appear before the checkpoint have been executed, and that 
+ none of the instances that appear after the checkpoint have not been executed before it? 
+ 
+Issues:
+ - `q(a)` A command `C` is being proposed with `TS=A`, and it's chosen path is the fast path for members `a,b,c`, therefore it's directly committed.
+ - A quorum member does not know about this command yet, but it's also the member which is responsible for the checkpointing.
+ - He issues a checkpoint for `TS=A-1` and announces it.
+ - Since `a,b,c` learn about the checkpoint later in time, (by the algorithm) they are required to arrange the checkpoint at a later time than a command `C`.
+ - So a `TS` of the checkpoint cannot represent the last timestamp of the operations behind it.
+ - But when replying to the CP announce, `a,b,c` will include `C` as one of the dependencies for `CP`, therefore letting
+ the CP replica know of it. We then use the dependencies of `CP` in order to know the actual `TS` of the checkpoint.
+ 
+ 
+ - The opposite: a command with `TS=A-1` may end up being executed after the checkpoint has been executed; since it's up
+ to the epaxos' discretion to decide the ordering of the commands that all of the replicas will agree with. Means the `TS` will cause
+ false positives.
+ 
+ - What if we had a fence over several checkpoints, that would give us a direct range of values ?  
+ 
 2017-12-31 18:04 How does a replica ensure exiting a quorum? `tags(quorum)`  
 -------------
 The algorithm itself allows for any replica to exit at any time; but for the sake of practical implementation this
@@ -10,7 +37,7 @@ Examples:
     + `q(b)` How do we make sure that an exit is clean, from a perspective of a single replica? How do we ensure that none of it's
     current instances have been committed and none are being actively created?
 
-2017-12-31 18:00 CommandID to SlotID `(tags:slots)`
+2017-12-31 18:00 CommandID to SlotID `tags(slots) id(cmd_id_slot_id)`
 --------------
 The newer version of command ID passed to the servers should support telling the leader identity from the command ID.
 
