@@ -83,6 +83,9 @@ def replica_client(cls: ClassVar[ReplicaClient], peer_id: int, replicas: Dict[in
         OP_CP = 1000
         LAT_BUF = 10
 
+        now = lambda: datetime.now()
+        time_start = now()
+
         latencies_mat = np.zeros(TOTAL + TOTAL // EACH)
 
         with cls(peer_id, replicas) as client:
@@ -105,8 +108,9 @@ def replica_client(cls: ClassVar[ReplicaClient], peer_id: int, replicas: Dict[in
                 # print(lat)
 
                 if i % EACH == 0:
+                    rps = (i+1) / (now() - time_start).total_seconds()
                     # print(latencies)
-                    logger.info(f'Client `{peer_id}` DONE {i + 1} LAT_AVG={sum(latencies) / len(latencies)}')
+                    logger.info(f'Client `{peer_id}` DONE {i + 1} LAT_AVG={sum(latencies) / len(latencies)*1000:0.2f}ms RPS={rps:0.2f}')
 
                 if len(latencies) > LAT_BUF:
                     latencies.popleft()
