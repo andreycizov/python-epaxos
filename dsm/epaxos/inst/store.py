@@ -129,7 +129,7 @@ class InstanceStore:
         self.inst[slot] = upd
 
         if old.state.command:
-            if old.state.command in self.cmd_to_slot:
+            if old.state.command.id in self.cmd_to_slot:
                 logger.error(f'Command id {old.state.command} not found in self.cmd_to_slot')
             else:
                 del self.cmd_to_slot[old.state.command.id]
