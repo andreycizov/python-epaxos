@@ -4,6 +4,7 @@ import random
 import signal
 import time
 from collections import deque
+from setproctitle import setproctitle
 from typing import Dict, ClassVar
 
 import sys
@@ -61,6 +62,7 @@ def replica_server(cls: ClassVar[ReplicaServer], epoch: int, replica_id: int, re
 
     with cls(epoch, replica_id, replicas) as server:
         try:
+            setproctitle(f"replica-{replica_id}")
             server.run()
         except:
             logger.exception(f'Server {replica_id}')

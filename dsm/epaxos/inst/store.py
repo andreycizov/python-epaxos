@@ -62,6 +62,7 @@ class InstanceStore:
 
         for slot in between_checkpoints(self.cp, new_cp):
             if slot in self.inst:
+                assert self.inst[slot].state.stage == Stage.Committed, 'Attempt to checkpoint before Commit'
                 del self.inst[slot]
 
         self.cp = cp

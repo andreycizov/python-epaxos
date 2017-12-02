@@ -8,6 +8,7 @@ from dsm.epaxos.replica.leader.main import LeaderCoroutine
 from dsm.epaxos.replica.main.ev import Tick, Wait
 from dsm.epaxos.replica.main.main import MainCoroutine
 from dsm.epaxos.replica.net.main import NetActor
+from dsm.epaxos.replica.pingpong.main import PingPongActor
 from dsm.epaxos.replica.quorum.ev import Configuration, Quorum
 from dsm.epaxos.replica.state.main import StateActor
 
@@ -23,6 +24,7 @@ class Replica:
         acceptor = AcceptorCoroutine(quorum, config)
         net = net_actor
         executor = ExecutorActor(self.quorum, self.store)
+        pingpong = PingPongActor(self.quorum)
 
         self.main = MainCoroutine(
             state,
@@ -31,6 +33,7 @@ class Replica:
             acceptor,
             net,
             executor,
+            pingpong,
             trace=self.quorum.replica_id == 1
         )
 

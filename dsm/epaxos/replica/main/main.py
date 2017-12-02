@@ -6,7 +6,7 @@ from dsm.epaxos.cmd.state import Command, Checkpoint
 from dsm.epaxos.inst.state import Slot, Ballot, State, Stage
 from dsm.epaxos.inst.store import InstanceStoreState
 
-from dsm.epaxos.net.packet import Packet, PACKET_CLIENT, PACKET_LEADER, PACKET_ACCEPTOR, ClientRequest
+from dsm.epaxos.net.packet import Packet, PACKET_CLIENT, PACKET_LEADER, PACKET_ACCEPTOR, ClientRequest, PACKET_PINGPONG
 from dsm.epaxos.replica.acceptor.main import AcceptorCoroutine
 from dsm.epaxos.replica.client.main import ClientsActor
 from dsm.epaxos.replica.corout import coroutiner, CoExit
@@ -44,6 +44,7 @@ class MainCoroutine(NamedTuple):
     acceptor: None
     net: None
     executor: None
+    pingpong: None
 
     trace: bool = False
 
@@ -107,6 +108,7 @@ class MainCoroutine(NamedTuple):
             self.run_sub(self.acceptor, ev, 0, False)
             self.run_sub(self.state, ev, 0, False)
             self.run_sub(self.net, ev, 0, False)
+            self.run_sub(self.pingpong, ev, 0, False)
         elif isinstance(ev, Packet):
             if isinstance(ev.payload, PACKET_CLIENT):
                 self.run_sub(self.clients, ev)
@@ -114,6 +116,8 @@ class MainCoroutine(NamedTuple):
                 self.run_sub(self.leader, ev)
             elif isinstance(ev.payload, PACKET_ACCEPTOR):
                 self.run_sub(self.acceptor, ev)
+            elif isinstance(ev.payload, PACKET_PINGPONG):
+                self.run_sub(self.pingpong, ev)
             else:
                 assert False, ev
         elif isinstance(ev, STATE_EVENTS):

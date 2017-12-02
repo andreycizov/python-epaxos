@@ -44,6 +44,14 @@ class ClientIdent(NamedTuple):
     pass
 
 
+class PingRequest(NamedTuple, Payload):
+    id: int
+
+
+class PongResponse(NamedTuple, Payload):
+    id: int
+
+
 class ClientRequest(NamedTuple, Payload):
     command: Command
 
@@ -155,6 +163,11 @@ PACKET_CLIENT = (
     ClientIdent,
 )
 
+PACKET_PINGPONG = (
+    PingRequest,
+    PongResponse,
+)
+
 PACKET_ACCEPTOR = (
     PreAcceptRequest,
 
@@ -200,6 +213,9 @@ PACKETS = [
     PrepareResponseNack,
 
     DivergedResponse,
+
+    PingRequest,
+    PongResponse
 ]
 
 TYPE_TO_PACKET = {v.__name__: v for v in PACKETS}

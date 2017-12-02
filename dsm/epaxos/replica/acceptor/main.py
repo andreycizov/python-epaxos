@@ -17,7 +17,7 @@ from dsm.epaxos.replica.net.ev import Receive
 from dsm.epaxos.replica.quorum.ev import Quorum, Configuration
 from dsm.epaxos.replica.state.ev import InstanceState, CheckpointEvent
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('acceptor')
 
 
 class AcceptorCoroutine:

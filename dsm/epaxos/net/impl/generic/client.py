@@ -38,12 +38,12 @@ class ReplicaClient:
     def recv(self):
         raise NotImplementedError()
 
-    def request(self, command: Command, timeout=10, timeout_resend=1, retries_max=5):
+    def request(self, command: Command, timeout=10, timeout_resend=0.1, retries_max=5):
         # assert self.leader_id is not None
 
         start = datetime.now()
 
-        self.connect()
+        # self.connect()
 
         while True:
             self.send(command)
@@ -65,6 +65,8 @@ class ReplicaClient:
                     break
                 else:
                     self.send(command)
+
+            self.blacklisted = [self.leader_id]
 
             # logger.info(f'Client `{self.peer_id}` -> {self.replica_id} RetrySend={command}')
             # self.blacklisted = [self._replica_id]

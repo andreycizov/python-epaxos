@@ -22,8 +22,10 @@ class CC:
         return len(self.ins) == 0
 
     def overlap(self, cc: 'CC'):
+        # todo: that can be made easier IFF "merge" is called once per a a job piece.
+        return (self.ins | self.outs | self.items) & (cc.ins | cc.outs | cc.items)
         return len(self.ins & cc.outs) or len(cc.ins & self.outs) or len(self.items & cc.ins) or len(
-            self.ins & cc.items)
+            self.ins & cc.items) or len(self.items & cc.outs) or len(self.items & cc.outs)
 
     def merge(self, cc: 'CC'):
         ins = self.ins | cc.ins
@@ -155,13 +157,22 @@ class ExecutorActor:
                 # self.log(lambda: f'{self.quorum.replica_id}\tSTAT\t{x.slot}\t{x.inst}\n')
                 if not self.is_executed(x.slot):
                     self.ctr += 1
+                    self.log(lambda: f'{self.quorum.replica_id}\tDPH0\t{self.dph.ccs}\n')
+
                     unlocked_list = self.dph.ready(x.slot, [x for x in x.inst.state.deps if not self.is_executed(x)])
+                    self.log(lambda: f'{self.quorum.replica_id}\tDPH1\t{self.dph.ccs}\n')
+                    self.log(lambda: f'{self.quorum.replica_id}\tDPH2\t{unlocked_list}\n')
 
                     # if self.ctr % 100:
                     #     self.log(lambda: f'{self.quorum.replica_id}\tDPHX\t{self.dph.ccs}\n')
-                    for checkpoint in self.build_execute_pending(unlocked_list):
-                        xx = self.store.load(checkpoint).inst
-                        yield CheckpointEvent(checkpoint, {x.replica_id: x for x in xx.state.deps})
+
+                    try:
+                        for checkpoint in self.build_execute_pending(unlocked_list):
+                            xx = self.store.load(checkpoint).inst
+                            yield CheckpointEvent(checkpoint, {x.replica_id: x for x in xx.state.deps})
+                    except:
+                        self.log(lambda: f'{self.quorum.replica_id}\tDPHz\t{self.dph.ccs}\n')
+                        raise
 
         else:
             assert False, x
