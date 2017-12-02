@@ -128,11 +128,11 @@ class InstanceStore:
 
         self.inst[slot] = upd
 
-        if old.state.command:
+        if exists and old.state.command:
             if old.state.command.id in self.cmd_to_slot:
-                logger.error(f'Command id {old.state.command} not found in self.cmd_to_slot')
-            else:
                 del self.cmd_to_slot[old.state.command.id]
+            else:
+                logger.error(f'Command id {old.state.command} not found in self.cmd_to_slot')
 
         if new.state.command:
             self.cmd_to_slot[new.state.command.id] = slot
