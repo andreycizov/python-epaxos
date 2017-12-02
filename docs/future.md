@@ -6,8 +6,7 @@ References:
 What are we trying to solve?
 
 Issues:
- - `q(a)` How do we know that all of the instances that appear before the checkpoint have been executed, and that 
- none of the instances that appear after the checkpoint have not been executed before it? 
+
  
 Issues:
  - `q(a)` A command `C` is being proposed with `TS=A`, and it's chosen path is the fast path for members `a,b,c`, therefore it's directly committed.
@@ -23,7 +22,11 @@ Issues:
  to the epaxos' discretion to decide the ordering of the commands that all of the replicas will agree with. Means the `TS` will cause
  false positives.
  
- - What if we had a fence over several checkpoints, that would give us a direct range of values ?  
+ - What if we had a fence over several checkpoints, that would give us a direct range of values ?
+ 
+Resolutions:
+  - `a(a)` We may ensure that all of the replicas presume the existence of a checkpoint command at any time, which means 
+  - `a'(a)` 
  
 2017-12-31 18:04 How does a replica ensure exiting a quorum? `tags(quorum)`  
 -------------
@@ -51,7 +54,8 @@ Issues:
  - `q(a)` When a client re-sends an instance, which was supposed to be lead by it's pre-generated leader
  , but that leader has not returned a response:
     1) **Leader has failed**: none of the replicas at this point will know about this instance and therefore will be forced to begin an explicit prepare
- session, instead of a normal startup. This will end up with an empty command which will be successfully returned to the client.
+ session, instead of a normal startup. This will end up with an empty command which will be successfully returned to the client. We can not initiate the command as
+ a different leader, because epaxos makes specific assumptions about the original command leader.
     2) **Leader hasn't failed**: a replica starting an explicit prepare will be forced to agree with the leader's decision at which point it will
     be able to answer to the client.
  - `q(b)` In such a case, we may also allow for checkpoints `ref(checkpoint)` to also represent the last timestamp at

@@ -2,13 +2,25 @@ PyDSM - Reference epaxos implementation for Python3.6
 ==========
 Playing with the epaxos before transferring this to a more high-performing language.
 
+### What is done
+
+ - An working agreement protocol as described in the paper
+ - Checkpointing
+ - Purges of committed instances given that they have been agreed on in the previous version
+ - Divergence errors - tell a replica we do not accept commands younger than the last checkpoint
+
 ### TODO
 
-- Joining of a replica (increase the epoch number, sync the state).
-- Leaving of a replica (can happen at any time, but we may find a better way to share that).
-- Purging of the history
-   - Necessary Executed Slots Cuts implemented in `instance/store.py`.
-   - Provide an interface for `command/deps/store.py` to purge it's history.
+Work in progress diary is in [future.md](./docs/future.md).
+
+ - Quorum membership changes
+   - Joining of a replica (increase the epoch number, sync the state).
+   - Leaving of a replica (by the protocol guarantees that may happen at any time, but we may find a better way to share that).
+
+ - Implement Thrifty version of the protocol and a faster version of paxos.
+ - Implement practical extensions as describen in [future.md](./docs/future.md):
+   - Better checkpointing by introducing a sliding window of earliest accepted commands 
+   - Getting rid of sequential slots as described in the paper and introducing slots that are correlated with request IDs.
 
 ### Notes
 I am interested in implementing a generalised e-paxos based interface which could then be plugged into any state machine in order to make it distributed. This involves:
