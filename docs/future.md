@@ -1,12 +1,23 @@
-2017-12-31 19:01 Checkpoints `tags(slots)`
+2017-12-02 23:38 Execution of commands in parallel `tags(executor)`
+------
+The algorithm provides the dependency graph and the internal sequencing for each of the commands as an output. This means
+that we may use that information to build a graph of parallel execution of tasks, further speeding up the execution.
+
+2017-12-02 19:01 Checkpoints `tags(slots)`
 -------
+Checkpoints are used in order to keep track of what subset of instances have been committed by all of the members of the quorum.
+It is not required for the theoretical foundations of the algorithm, yet a practical implementation needs to take the 
+memory limits of a single machine into account, therefore we need a mechanism which would allow us to track what information
+we may purge as it's no longer required.
+
+The checkpoints are crucial for:
+ - **Quorum health checks**: if we know that a checkpoint had been successfully committed, then a majority of replicas
+ must have also committed this checkpoint. If they have not - then they should panic implying a member of the quorum has diverged.
+ - **Memory management**: depending on the configuration of the algorithm, we may use the checkpoints to approximate which instances
+ we may dispose of (and replicas trying to access these instances should panic)
+
 References:
  - `ref(cmd_id_slot_id)`
-
-What are we trying to solve?
-
-Issues:
-
  
 Issues:
  - `q(a)` A command `C` is being proposed with `TS=A`, and it's chosen path is the fast path for members `a,b,c`, therefore it's directly committed.
@@ -22,13 +33,7 @@ Issues:
  to the epaxos' discretion to decide the ordering of the commands that all of the replicas will agree with. Means the `TS` will cause
  false positives.
  
- - What if we had a fence over several checkpoints, that would give us a direct range of values ?
- 
-Resolutions:
-  - `a(a)` We may ensure that all of the replicas presume the existence of a checkpoint command at any time, which means 
-  - `a'(a)` 
- 
-2017-12-31 18:04 How does a replica ensure exiting a quorum? `tags(quorum)`  
+2017-12-02 18:04 How does a replica ensure exiting a quorum? `tags(quorum)`  
 -------------
 The algorithm itself allows for any replica to exit at any time; but for the sake of practical implementation this
 must be made explicit through a reconfiguration of the quorum. 
@@ -40,7 +45,7 @@ Examples:
     + `q(b)` How do we make sure that an exit is clean, from a perspective of a single replica? How do we ensure that none of it's
     current instances have been committed and none are being actively created?
 
-2017-12-31 18:00 CommandID to SlotID `tags(slots) id(cmd_id_slot_id)`
+2017-12-02 18:00 CommandID to SlotID `tags(slots) id(cmd_id_slot_id)`
 --------------
 The newer version of command ID passed to the servers should support telling the leader identity from the command ID.
 
@@ -72,10 +77,11 @@ Guarantees:
  - `g(d)` Noops are now tied to command IDs specified by the clients. Clients know if their command had failed to execute.
  
 
-2017-12-31 18:00 Quorum size and status changes. `tags(quorum)`
+2017-12-02 18:00 Quorum size and status changes. `tags(quorum)`
 - 
 A few questions remain unanswered:
  - `q(a)` How does a quorum of size 5 with 2 failed replicas grow in size without breaking the algorithm
    that; if grown by a single replica - will fail to reach an agreement on non-committed instances, since the size of the quorum had
    increased, but the amount of live replicas hasn't yet?
- -  
+   - `a(a)` We may first downgrade the size of the quorum to 3 replicas, and then add the new (joining) replica?
+   - `q(b)` Would that preserve the guarantees proposed by the initial paper?
