@@ -19,7 +19,7 @@ class Replica:
         self.store = InstanceStore()
 
         state = StateActor(self.quorum, self.store)
-        clients = ClientsActor()
+        clients = ClientsActor(self.quorum)
         leader = LeaderCoroutine(quorum, )
         acceptor = AcceptorCoroutine(quorum, config)
         net = net_actor

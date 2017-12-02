@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from dsm.epaxos.inst.state import Stage, Slot
@@ -7,11 +8,15 @@ from dsm.epaxos.net.packet import Packet
 from dsm.epaxos.replica.leader.ev import LeaderStart
 from dsm.epaxos.replica.main.ev import Wait, Reply
 from dsm.epaxos.replica.net.ev import Send
+from dsm.epaxos.replica.quorum.ev import Quorum
 from dsm.epaxos.replica.state.ev import LoadCommandSlot, InstanceState
+
+logger = logging.getLogger('clients')
 
 
 class ClientsActor:
-    def __init__(self):
+    def __init__(self, quorum: Quorum):
+        self.quorum = quorum
         self.peers = {}  # type: Dict[int, List[Slot]]
         self.clients = {}
 
@@ -30,6 +35,8 @@ class ClientsActor:
                 slot, inst = loaded
 
                 inst: Optional[InstanceStoreState]
+
+                logger.error(f'{self.quorum.replica_id} Learned about a new client {x.origin} of slot {slot} {inst.state.command}')
 
                 if inst.state.stage >= Stage.Committed:
                     yield Send(

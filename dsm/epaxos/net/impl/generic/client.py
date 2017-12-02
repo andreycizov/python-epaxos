@@ -29,6 +29,9 @@ class ReplicaClient:
 
         self.leader_id = replica_id
 
+
+        logger.info(f'Client `{self.peer_id}` -> {self.leader_id} Connect')
+
     def poll(self, max_wait) -> bool:
         raise NotImplementedError()
 
@@ -46,6 +49,7 @@ class ReplicaClient:
         # self.connect()
 
         while True:
+            # self.connect()
             self.send(command)
             retries = retries_max
 
@@ -61,14 +65,14 @@ class ReplicaClient:
                     end = datetime.now()
                     latency = (end - start).total_seconds()
                     return latency, rtn
-                elif retries == 0:
+                elif retries <= 0:
                     break
                 else:
                     self.send(command)
 
             self.blacklisted = [self.leader_id]
 
-            # logger.info(f'Client `{self.peer_id}` -> {self.replica_id} RetrySend={command}')
+            logger.info(f'Client `{self.peer_id}` -> {self.leader_id} RetrySend={command} BL={self.blacklisted}')
             # self.blacklisted = [self._replica_id]
             # logger.info(f'{self.peer_id} Blacklisted {self._replica_id}')
             self.connect()

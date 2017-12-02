@@ -11,7 +11,7 @@ from dsm.epaxos.net.impl.udp.server import UDPReplicaServer
 # from dsm.epaxos.net.impl.zeromq.server import ZMQReplicaServer
 
 replicas = {
-    i: ReplicaAddress(f'tcp://0.0.0.0:{60000 + i}', f'tcp://0.0.0.0:{61000+i}') for i in range(1, 6)
+    i: ReplicaAddress(f'tcp://127.0.0.1:{60000 + i}', f'tcp://127.0.0.1:{61000+i}') for i in range(1, 6)
 }
 
 clients = list(range(100, 105))
