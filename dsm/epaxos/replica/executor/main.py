@@ -131,11 +131,12 @@ class ExecutorActor:
     def execute_command(self, slot: Slot, cmd: Command):
         self.log(lambda: f'{self.quorum.replica_id}\tCOMM\t{slot}\t{cmd}\t{self.executed_cut}\t{self.ctr}\n')
 
-        if cmd.payload:
-            if isinstance(cmd.payload, Checkpoint):
-                return slot
-            else:
-                return None
+        if cmd:
+            if cmd.payload:
+                if isinstance(cmd.payload, Checkpoint):
+                    return slot
+                else:
+                    return None
 
     def build_execute_pending(self, cc):
         insts = {x: self.store.load(x).inst for x in cc}

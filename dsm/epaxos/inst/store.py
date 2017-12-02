@@ -15,6 +15,9 @@ class InstanceStoreState(NamedTuple):
         return f'ISS({self.ballot},{self.state})'
 
 
+logger = logging.getLogger(__name__)
+
+
 class TransitionException(Exception):
     def __init__(self, curr_inst: Optional[InstanceStoreState], new_inst: Optional[InstanceStoreState]):
         self.inst = curr_inst
@@ -126,7 +129,10 @@ class InstanceStore:
         self.inst[slot] = upd
 
         if old.state.command:
-            del self.cmd_to_slot[old.state.command.id]
+            if old.state.command in self.cmd_to_slot:
+                logger.error(f'Command id {old.state.command} not found in self.cmd_to_slot')
+            else:
+                del self.cmd_to_slot[old.state.command.id]
 
         if new.state.command:
             self.cmd_to_slot[new.state.command.id] = slot
