@@ -18,7 +18,7 @@ class NetActor:
         if isinstance(x, Send):
             self.send(x)
             yield Reply()
-        if isinstance(x, Tick):
+        elif isinstance(x, Tick):
             if x.id % 330 == 0 and hasattr(self, 'net_stats'):
                 rcv = sorted([(k, v) for k, v in self.net_stats.recv.items()])
                 snd = sorted([(k, v) for k, v in self.net_stats.send.items()])

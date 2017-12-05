@@ -1,3 +1,4 @@
+import logging
 from collections import deque
 from pprint import pprint
 from typing import NamedTuple, Dict, Deque, List, Optional, Tuple, Set
@@ -7,9 +8,11 @@ from tarjan import tarjan
 from dsm.epaxos.cmd.state import Command, Checkpoint
 from dsm.epaxos.inst.state import Slot, Stage
 from dsm.epaxos.inst.store import InstanceStore, InstanceStoreState
-from dsm.epaxos.replica.main.ev import Reply
+from dsm.epaxos.replica.main.ev import Reply, Tick
 from dsm.epaxos.replica.quorum.ev import Quorum
 from dsm.epaxos.replica.state.ev import InstanceState, CheckpointEvent
+
+logger = logging.getLogger('executor')
 
 
 class CC:
@@ -46,6 +49,9 @@ class CC:
         return len(self.ins & cc.outs) or len(cc.ins & self.outs) or len(self.items & cc.ins) or len(
             self.ins & cc.items) or len(self.items & cc.outs) or len(self.items & cc.outs)
 
+    def all(self):
+        return self.ins | self.outs | self.items
+
     def merge(self, cc: 'CC'):
         ins = self.ins | cc.ins
         outs = self.outs | cc.outs
@@ -58,8 +64,15 @@ class CC:
         self.ins = self.ins - self.items
         self.outs = self.outs - self.items
 
+        assert len(self.ins & self.outs) == 0, repr(self)
+        assert len(self.outs & self.items) == 0, repr(self)
+        assert len(self.items & self.ins) == 0, repr(self)
+
     def __repr__(self):
         return f'CC({self.ins},{self.outs},{self.items})'
+
+    def depth(self):
+        return len(self.ins) + len(self.outs) + len(self.items)
 
     @classmethod
     def from_item(self, item: Slot, deps: Set[Slot]):
@@ -113,11 +126,15 @@ class ExecutorActor:
 
         self.executed_cut = {}  # type: Dict[int, Slot]
         self.executed = {}  # type: Dict[Slot, bool]
+        self.executing = {}  # type: Dict[Slot, bool]
 
         self._log = open(f'executor-{self.quorum.replica_id}.log', 'w+')
 
         self.dph = DepthFirstHelper()
         self.ctr = 0
+
+        self.st_exec = 0
+        self.st_max_depth = 0
 
         # self.commit_expected = defaultdict(set)  # type: Dict[Slot, Set[Slot]]
 
@@ -132,6 +149,7 @@ class ExecutorActor:
         assert self.is_committed(slot), (slot, self.store.load(slot))
         assert not self.is_executed(slot), (slot, self.store.load(slot))
         self.executed[slot] = True
+        self.st_exec += 1
 
         slot = slot
 
@@ -140,6 +158,9 @@ class ExecutorActor:
             del self.executed[slot]
 
             slot = slot.next()
+
+    def is_executing(self, slot):
+        return self.is_cut(slot) or self.executing.get(slot, False)
 
     def is_executed(self, slot: Slot):
         return self.is_cut(slot) or self.executed.get(slot, False)
@@ -175,7 +196,8 @@ class ExecutorActor:
 
             if x.inst.state.stage >= Stage.Committed:
                 # self.log(lambda: f'{self.quorum.replica_id}\tSTAT\t{x.slot}\t{x.inst}\n')
-                if not self.is_executed(x.slot):
+                if not self.is_executed(x.slot) and not self.is_executing(x.slot):
+                    self.executing[x.slot] = True
                     self.ctr += 1
                     self.log(lambda: f'{self.quorum.replica_id}\tDPH0\t{self.dph.ccs}\n')
 
@@ -193,7 +215,15 @@ class ExecutorActor:
                     except:
                         self.log(lambda: f'{self.quorum.replica_id}\tDPHz\t{self.dph.ccs}\n')
                         raise
-
+        elif isinstance(x, Tick):
+            if x.id % 330 == 0:
+                totd = sum(x.depth() for _, x in self.dph.ccs.items())
+                logger.error(
+                    f'{self.quorum.replica_id} Exec={self.st_exec} Deps={len(self.dph.ccs)} Depth={totd}')
+                if totd > 10:
+                    for cc in self.dph.ccs.values():
+                        logger.error(
+                            f'{self.quorum.replica_id} {cc}')
         else:
             assert False, x
         yield Reply()

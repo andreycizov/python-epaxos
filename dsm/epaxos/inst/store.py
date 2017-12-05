@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 class TransitionException(Exception):
-    def __init__(self, curr_inst: Optional[InstanceStoreState], new_inst: Optional[InstanceStoreState]):
+    def __init__(self, slot: Slot, curr_inst: Optional[InstanceStoreState], new_inst: Optional[InstanceStoreState]):
+        self.slot = slot
         self.inst = curr_inst
 
 
@@ -102,7 +103,7 @@ class InstanceStore:
 
     def load(self, slot: Slot):
         if self.cp.earlier(slot):
-            raise SlotTooOld(None, None)
+            raise SlotTooOld(slot, None, None)
 
         r = self.inst.get(slot)
         exists = True
@@ -132,13 +133,13 @@ class InstanceStore:
         exists, old = self.load(slot)
 
         if new.ballot < old.ballot:
-            raise IncorrectBallot(old, new)
+            raise IncorrectBallot(slot, old, new)
 
         if new.state.stage < old.state.stage:
-            raise IncorrectStage(old, new)
+            raise IncorrectStage(slot, old, new)
 
         if old.state.stage > Stage.PreAccepted and old.state.command is not None and old.state.command != new.state.command:
-            raise IncorrectCommand(old, new)
+            raise IncorrectCommand(slot, old, new)
 
         if new.state.stage == Stage.PreAccepted and new.state.command:
             # rethink the command ordering

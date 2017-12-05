@@ -61,7 +61,7 @@ class ClientsActor:
             self.peers[x.origin].append(slot)
         elif isinstance(x, Tick):
             if x.id % 330 == 0:
-                logger.error(f'St={self.st_starts}/{self.st_restarts}')
+                logger.error(f'{self.quorum.replica_id} St={self.st_starts}/{self.st_restarts}')
         elif isinstance(x, InstanceState):
             if x.slot in self.clients and x.inst.state.stage == Stage.Committed:
                 # print('REPLY')

@@ -31,6 +31,52 @@ class RecoveryReply(NamedTuple):
     r: packet.PrepareResponseAck
 
 
+'''
+Traceback (most recent call last):
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/net/impl/generic/cli.py", line 66, in replica_server
+    server.run()
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/net/impl/generic/server.py", line 159, in run
+    self.main()
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/net/impl/generic/server.py", line 132, in main
+    self.replica.tick(self.stats.ticks)
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/inst.py", line 44, in tick
+    self.main.event(Tick(idx))
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/main/main.py", line 108, in event
+    self.run_sub(self.acceptor, ev, 0, False)
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/main/main.py", line 94, in run_sub
+    rep = corout.throw(e)
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/acceptor/main.py", line 115, in event
+    'TIMEOUT'
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/main/main.py", line 92, in run_sub
+    corout_payload = self.route(rep, d + 4)
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/main/main.py", line 55, in route
+    return self.run_sub(self.leader, req, d)
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/main/main.py", line 94, in run_sub
+    rep = corout.throw(e)
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/leader/main.py", line 87, in event
+    yield from self.run_sub(x.slot)
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/leader/main.py", line 40, in run_sub
+    req = corout.throw(e)
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/leader/sub.py", line 43, in leader_explicit_prepare
+    inst.state
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/leader/main.py", line 38, in run_sub
+    rep = yield req
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/main/main.py", line 92, in run_sub
+    corout_payload = self.route(rep, d + 4)
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/main/main.py", line 53, in route
+    return self.run_sub(self.state, req, d)
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/main/main.py", line 87, in run_sub
+    rep = coroutiner(corout)
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/corout.py", line 26, in coroutiner
+    nxt = next(corout)
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/replica/state/main.py", line 55, in event
+    r = self.store.load(d)
+  File "/Users/apple/Documents/Devel/Personal/dsm/dsm/epaxos/inst/store.py", line 105, in load
+    raise SlotTooOld(None, None)
+dsm.epaxos.inst.store.SlotTooOld: (None, None)
+'''
+
+
 def leader_explicit_prepare(q: Quorum, slot: Slot, reason=None):
     inst = yield Load(slot)  # type: InstanceStoreState
 
@@ -235,8 +281,8 @@ def leader_pre_accept(q: Quorum, slot: Slot, inst: InstanceStoreState, allow_fas
             # raise ExplicitPrepare('pre_accept:NACK')
 
     if allow_fast and (
-            all(x.deps == inst.state.deps for x in replies) and
-            all(x.seq == inst.state.seq for x in replies)
+        all(x.deps == inst.state.deps for x in replies) and
+        all(x.seq == inst.state.seq for x in replies)
     ):
         inst = yield Store(
             slot,

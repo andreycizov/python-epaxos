@@ -27,7 +27,7 @@ class KeyedDepsCache:
         for x in mut.keys:
             inter_val = self.store.get(x)
 
-            if inter_val and inter_val.slot != slot:
+            if inter_val and inter_val.slot != slot and inter_val.slot < slot:
                 last_seq = max(last_seq, inter_val.seq)
 
         if self.cp:
@@ -41,13 +41,14 @@ class KeyedDepsCache:
         for x in mut.keys:
             inter_val = self.store.get(x)
 
-            if inter_val and inter_val.slot != slot:
+            if inter_val and inter_val.slot != slot and inter_val.slot < slot:
                 r.append(inter_val.slot)
 
-            self.store[x] = CacheState(
-                slot,
-                seq
-            )
+            if inter_val is None or inter_val.slot < slot:
+                self.store[x] = CacheState(
+                    slot,
+                    seq
+                )
 
         return r
 
@@ -66,7 +67,10 @@ class KeyedDepsCache:
                 new_deps = [x.slot for x in self.store.values()]
 
             elif self.cp.state.slot == slot:
-                new_seq = max(max((x.seq for x in self.store.values()), default=-1), self.cp.state.seq - 1) + 1
+                new_seq = max(
+                    max((x.seq for x in self.store.values()), default=-1),
+                    self.cp.state.seq - 1
+                ) + 1
                 new_deps = [x.slot for x in self.store.values()] + self.cp.deps
             else:
                 new_seq = max(max((x.seq for x in self.store.values()), default=-1), self.cp.state.seq) + 1
