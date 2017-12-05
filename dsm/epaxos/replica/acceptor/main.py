@@ -5,7 +5,7 @@ from typing import NamedTuple, Dict, Any, List
 
 from dsm.epaxos.cmd.state import Command, CommandID, Checkpoint
 from dsm.epaxos.inst.state import Slot, Stage
-from dsm.epaxos.inst.store import between_checkpoints
+from dsm.epaxos.inst.store import between_checkpoints, CheckpointCycle
 from dsm.epaxos.net import packet
 from dsm.epaxos.net.packet import PACKET_ACCEPTOR
 from dsm.epaxos.replica.acceptor.getsizeof import getsize
@@ -37,7 +37,7 @@ class AcceptorCoroutine:
         self.timeouts_slots = timeouts_slots
         self.slots_timeouts = slots_timeouts
         self.last_cp = None
-        self.cp = {}
+        self.cp = CheckpointCycle()
 
         self.tick = 0
 
@@ -149,23 +149,18 @@ class AcceptorCoroutine:
                 # logger.debug(
                 #     f'\n{self.quorum.replica_id}\t{x.id}\n\tInstances:\n{fmtd}\n\tPackets:\n{fmtd3}')
         elif isinstance(x, CheckpointEvent):
-            if self.last_cp:
-                new_cp = {**self.cp, **self.last_cp.at}
-                ctr = 0
+            ctr = 0
+            for slot in between_checkpoints(*self.cp.cycle(x.at)):
 
-                for slot in between_checkpoints(self.cp, new_cp):
+                if slot in self.subs:
+                    ctr += 1
+                    del self.subs[slot]
+                if slot in self.waiting_for:
+                    ctr += 1
+                    del self.waiting_for[slot]
 
-                    if slot in self.subs:
-                        ctr += 1
-                        del self.subs[slot]
-                    if slot in self.waiting_for:
-                        ctr += 1
-                        del self.waiting_for[slot]
+            logger.error(f'{self.quorum.replica_id} cleaned old things between {ctr}: {self.cp}')
 
-                self.cp = new_cp
-                logger.error(f'{self.quorum.replica_id} cleaned old things between {ctr}: {self.cp}')
-
-            self.last_cp = x
         else:
             assert False, x
 

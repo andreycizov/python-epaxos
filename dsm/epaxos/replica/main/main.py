@@ -109,6 +109,7 @@ class MainCoroutine(NamedTuple):
             self.run_sub(self.state, ev, 0, False)
             self.run_sub(self.net, ev, 0, False)
             self.run_sub(self.pingpong, ev, 0, False)
+            self.run_sub(self.clients, ev, 0, False)
         elif isinstance(ev, Packet):
             if isinstance(ev.payload, PACKET_CLIENT):
                 self.run_sub(self.clients, ev)

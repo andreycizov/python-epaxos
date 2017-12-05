@@ -66,9 +66,7 @@ class StateActor:
             yield InstanceState(x.slot, new)
             yield Reply(new)
         elif isinstance(x, CheckpointEvent):
-            if self.prev_cp:
-                self.store.set_cp(self.prev_cp.at)
-            self.prev_cp = x
+            self.store.set_cp(x.at)
             yield Reply(None)
         else:
             assert False, x

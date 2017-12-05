@@ -13,6 +13,25 @@ from dsm.epaxos.replica.state.ev import InstanceState, CheckpointEvent
 
 
 class CC:
+    """
+
+
+    a: OUT -> cc1
+    b: OUT -> cc2
+    c0: IN -> cc1
+    c1: OUT -> cc1
+
+    INSERT d -> (a, g, f)
+
+    a: INNER -> cc1
+    b: OUT -> cc2
+    c0: IN -> cc1
+    c1: OUT -> cc1
+    g: IN -> cc1
+    f: IN -Ю cc1
+
+    """
+
     def __init__(self, ins: Set[Slot], outs: Set[Slot], items: Set[Slot]):
         self.ins: Set[Slot] = ins
         self.outs: Set[Slot] = outs

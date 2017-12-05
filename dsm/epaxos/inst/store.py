@@ -53,25 +53,55 @@ def between_checkpoints(old, new):
             yield Slot(x, y)
 
 
+CP_T = Dict[int, Slot]
+
+
+class CheckpointCycle:
+    def __init__(self):
+        # [ old ][ mid ][ current ]
+        self.cp_old = {}  # type: CP_T
+        self.cp_mid = {}  # type: CP_T
+
+    def earlier(self, slot: Slot):
+        return slot < self.cp_old.get(slot.replica_id, Slot(slot.replica_id, -1))
+
+    def cycle(self, cp: Dict[int, Slot]) -> Tuple[CP_T, CP_T]:
+        """
+        :param cp: new checkpoint
+        :return: range of the recycled checkpoint
+        """
+
+        cp_prev_old = self.cp_old
+        cp_prev_mid = self.cp_mid
+        cp_old = {**self.cp_old, **self.cp_mid}
+        cp_mid = {**self.cp_mid, **cp}
+
+        self.cp_old = cp_old
+        self.cp_mid = cp_mid
+
+        return cp_prev_old, cp_prev_mid
+
+    def __repr__(self):
+        o = sorted(self.cp_old.items())
+        m = sorted(self.cp_mid.items())
+        return f'CheckpointCycle({o}, {m})'
+
+
 class InstanceStore:
     def __init__(self):
         self.inst = {}  # type: Dict[Slot, InstanceStoreState]
         self.cmd_to_slot = {}  # type: Dict[CommandID, Slot]
         self.deps_cache = KeyedDepsCache()
-        self.cp = {}  # type: Dict[int, Slot]
+        self.cp = CheckpointCycle()
 
     def set_cp(self, cp: Dict[int, Slot]):
-        new_cp = {**self.cp, **cp}
-
-        for slot in between_checkpoints(self.cp, new_cp):
+        for slot in between_checkpoints(*self.cp.cycle(cp)):
             if slot in self.inst:
                 assert self.inst[slot].state.stage == Stage.Committed, 'Attempt to checkpoint before Commit'
                 del self.inst[slot]
 
-        self.cp = cp
-
     def load(self, slot: Slot):
-        if slot < self.cp.get(slot.replica_id, Slot(slot.replica_id, -1)):
+        if self.cp.earlier(slot):
             raise SlotTooOld(None, None)
 
         r = self.inst.get(slot)

@@ -14,7 +14,7 @@ replicas = {
     i: ReplicaAddress(f'tcp://127.0.0.1:{60000 + i}', f'tcp://127.0.0.1:{61000+i}') for i in range(1, 6)
 }
 
-clients = list(range(100, 105))
+clients = list(range(100, 110))
 
 
 def main():

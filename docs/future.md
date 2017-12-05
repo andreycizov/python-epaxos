@@ -33,6 +33,8 @@ Issues:
  to the epaxos' discretion to decide the ordering of the commands that all of the replicas will agree with. Means the `TS` will cause
  false positives.
  
+ 
+ 
 2017-12-02 18:04 How does a replica ensure exiting a quorum? `tags(quorum)`  
 -------------
 The algorithm itself allows for any replica to exit at any time; but for the sake of practical implementation this

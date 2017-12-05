@@ -30,7 +30,7 @@ class ReplicaClient:
         self.leader_id = replica_id
 
 
-        logger.info(f'Client `{self.peer_id}` -> {self.leader_id} Connect')
+        # logger.info(f'Client `{self.peer_id}` -> {self.leader_id} Connect')
 
     def poll(self, max_wait) -> bool:
         raise NotImplementedError()
@@ -72,7 +72,7 @@ class ReplicaClient:
 
             self.blacklisted = [self.leader_id]
 
-            logger.info(f'Client `{self.peer_id}` -> {self.leader_id} RetrySend={command} BL={self.blacklisted}')
+            # logger.info(f'Client `{self.peer_id}` -> {self.leader_id} RetrySend={command} BL={self.blacklisted}')
             # self.blacklisted = [self._replica_id]
             # logger.info(f'{self.peer_id} Blacklisted {self._replica_id}')
             self.connect()
