@@ -32,6 +32,9 @@ class ClientsActor:
 
             loaded = yield LoadCommandSlot(x.payload.command.id)
 
+
+            # todo: this. here we assume that slots are not correlated with commands.
+
             if loaded is None:
                 self.st_starts += 1
                 slot = yield LeaderStart(x.payload.command)

@@ -41,12 +41,12 @@ class ReplicaClient:
     def recv(self):
         raise NotImplementedError()
 
-    def request(self, command: Command, timeout=10, timeout_resend=0.1, retries_max=50):
+    def request(self, command: Command, timeout=10, timeout_resend=0.3, retries_max=50):
         # assert self.leader_id is not None
 
         start = datetime.now()
 
-        # self.connect()
+        self.connect()
 
         while True:
             # self.connect()

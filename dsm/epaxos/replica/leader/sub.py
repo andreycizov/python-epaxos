@@ -112,14 +112,16 @@ def leader_explicit_prepare(q: Quorum, slot: Slot, reason=None):
     )
 
     while len(replies) < q.slow_size:
-        peer, (ack, nack) = yield Receive.any(
+        peer, (ack, nack, diverged) = yield Receive.any(
             packet.PrepareResponseAck,
             packet.PreAcceptResponseNack,
+            packet.DivergedResponse
         )
 
         peer: int
         ack: Optional[packet.PrepareResponseAck]
         nack: Optional[packet.PrepareResponseNack]
+        diverged: Optional[packet.DivergedResponse]
 
         if ack:
             if ack.ballot != ballot:
@@ -134,6 +136,9 @@ def leader_explicit_prepare(q: Quorum, slot: Slot, reason=None):
 
             # logger.debug(f'{q.replica_id} explicit prepare NACK {inst} {ballot}')
             raise ExplicitPrepare('explicit:NACK')
+
+        if diverged:
+            raise Exception("I have diverged")
 
     len_rep = len(replies)
 
@@ -259,7 +264,7 @@ def leader_pre_accept(q: Quorum, slot: Slot, inst: InstanceStoreState, allow_fas
     replies = []
     replies: List[packet.PreAcceptResponseAck]
 
-    while len(replies) + 1 < q.slow_size:
+    while len(replies) + 1 < q.fast_size:
         _, (ack, nack) = yield Receive.any(
             packet.PreAcceptResponseAck,
             packet.PreAcceptResponseNack,

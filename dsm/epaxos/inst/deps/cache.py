@@ -62,6 +62,8 @@ class KeyedDepsCache:
             )
             return seq, sorted(set(deps))
         elif isinstance(cmd.payload, Checkpoint):
+            # Checkpoint - "These are the last slots I know about."
+
             if self.cp is None:
                 new_seq = max((x.seq for x in self.store.values()), default=-1) + 1
                 new_deps = [x.slot for x in self.store.values()]

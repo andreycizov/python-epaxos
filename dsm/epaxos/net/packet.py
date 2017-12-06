@@ -1,7 +1,8 @@
-from typing import List, NamedTuple, Optional
+from typing import List, NamedTuple, Optional, Dict
 
 from dsm.epaxos.cmd.state import Command
 from dsm.epaxos.inst.state import Slot, Ballot, Stage
+from dsm.epaxos.replica.quorum.ev import ReplicaAddress
 from dsm.serializer import T_des, T_ser
 
 
@@ -157,6 +158,10 @@ class DivergedResponse(NamedTuple, Payload, ):
     slot: Slot
 
 
+class QuorumMembership(NamedTuple):
+    peers: Dict[int, ReplicaAddress]
+
+
 PACKET_CLIENT = (
     ClientRequest,
     ClientResponse,
@@ -176,6 +181,8 @@ PACKET_ACCEPTOR = (
     CommitRequest,
 
     PrepareRequest,
+
+    DivergedResponse,
 
 )
 

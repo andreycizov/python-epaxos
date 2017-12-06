@@ -41,7 +41,7 @@ class Quorum(NamedTuple):
 
 
 class Configuration(NamedTuple):
-    timeout: int = 1
+    timeout: int = 3
     timeout_range: int = 3
     jiffies: int = 33
     checkpoint_each: int = 10 * 33

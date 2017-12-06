@@ -60,8 +60,8 @@ class StateActor:
 
                 deps_comm.append(r.inst.state.stage == Stage.Committed)
 
-            # if new.ballot.b > 10:
-            #     logger.error(f'{self.quorum.replica_id} {x.slot} {new} HW')
+            if new.ballot.b > 10:
+                logger.error(f'{self.quorum.replica_id} {x.slot} {new} HW')
 
             yield InstanceState(x.slot, new)
             yield Reply(new)

@@ -33,6 +33,25 @@ class CC:
     g: IN -> cc1
     f: IN -Ю cc1
 
+    -----------
+    removals need to be done as a transaction (all-or-none)
+
+    swaps (
+    -----------
+
+    a > 0
+    b < 1
+    c > 1
+    d < 1
+
+    __________
+
+    c < b
+    d < b
+    a > b
+
+    -----------
+
     """
 
     def __init__(self, ins: Set[Slot], outs: Set[Slot], items: Set[Slot]):
@@ -44,10 +63,18 @@ class CC:
         return len(self.ins) == 0
 
     def overlap(self, cc: 'CC'):
+        # self is in the store.
+        # all keys are not re-entrable
+
+        if self.ins & cc.outs:
+            return True
+        else:
+            return (self.ins | self.outs | self.items) & (cc.ins | cc.outs | cc.items)
+
         # todo: that can be made easier IFF "merge" is called once per a a job piece.
-        return (self.ins | self.outs | self.items) & (cc.ins | cc.outs | cc.items)
-        return len(self.ins & cc.outs) or len(cc.ins & self.outs) or len(self.items & cc.ins) or len(
-            self.ins & cc.items) or len(self.items & cc.outs) or len(self.items & cc.outs)
+        # return (self.ins | self.outs | self.items) & (cc.ins | cc.outs | cc.items)
+        # return len(self.ins & cc.outs) or len(cc.ins & self.outs) or len(self.items & cc.ins) or len(
+        #     self.ins & cc.items) or len(self.items & cc.outs) or len(self.items & cc.outs)
 
     def all(self):
         return self.ins | self.outs | self.items
@@ -102,7 +129,7 @@ class DepthFirstHelper:
         overlaps = []
 
         for k, cc in self.ccs.items():
-            if new_cc.overlap(cc):
+            if cc.overlap(new_cc):
                 overlaps.append(k)
 
         for overlap in overlaps:

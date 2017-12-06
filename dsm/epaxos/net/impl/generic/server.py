@@ -2,22 +2,29 @@ import contextlib
 import logging
 from datetime import datetime, timedelta
 from time import sleep
-from typing import Dict, Iterable
+from typing import Dict, Iterable, NamedTuple
 
 from dsm.epaxos.net.packet import Packet
 from dsm.epaxos.replica.inst import Replica
 from dsm.epaxos.replica.net.main import NetActor
 from dsm.epaxos.replica.quorum.ev import Configuration, Quorum, ReplicaAddress
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('cli')
 
+class Timer(NamedTuple):
+    s: datetime
+
+    def passed(self):
+        return datetime.now() - self.s
 
 @contextlib.contextmanager
-def timeit(fn):
+def timeit(fn=None):
     s = datetime.now()
-    yield
+    yield Timer(s)
     e = datetime.now()
-    fn(e - s)
+
+    if fn:
+        fn(e - s)
 
 
 class Stats:
@@ -109,11 +116,12 @@ class ReplicaServer:
 
             to_next_tick = (next_tick_time - loop_start_time).total_seconds()
 
-            min_wait_poll = max([0, to_next_tick * 0.9, td_tick.total_seconds() * 0.90])
+            min_wait_poll = max([0, min([to_next_tick * 0.9, td_tick.total_seconds() * 0.90])])
+
+            assert min_wait_poll < td_tick.total_seconds(), min_wait_poll
 
             if should_poll:
                 poll_result = self.poll(min_wait_poll)
-                should_poll = True
             else:
                 poll_result = True
 
@@ -129,9 +137,10 @@ class ReplicaServer:
             # print(self.state.ticks)
 
             if loop_poll_time > next_tick_time:
+                self.stats.ticks += 1
                 self.replica.tick(self.stats.ticks)
                 next_tick_time = next_tick_time + td_tick
-                self.stats.ticks += 1
+
 
             pkts_sent += self.send()
 
@@ -144,10 +153,26 @@ class ReplicaServer:
             if poll_result:
                 rcvd = 0
 
-                with timeit(upd_recv):
-                    for x in self.recv():
+                with timeit(upd_recv) as tmr:
+                    rcvd_a = 0
+                    for i, x in enumerate(self.recv()):
+
+                        # with timeit() as tmr2:
                         self.replica.packet(x)
-                        rcvd += 1
+                            # if tmr2.passed().total_seconds() > 1:
+                            #     logger.debug(f'{self.quorum.replica_id} {tmr2.passed()} HW {x}')
+                        rcvd_a += 1
+
+                        if (i+1) % 100 == 0:
+
+                            passed = tmr.passed()
+
+                            if passed.total_seconds() > min_wait_poll:
+                                # logger.debug(f'{self.quorum.replica_id} {passed.total_seconds()} HW {rcvd_a}')
+                                break
+
+                    rcvd += rcvd_a
+
                 pkts_rcvd += rcvd
             else:
                 pass

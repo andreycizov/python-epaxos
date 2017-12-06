@@ -11,7 +11,7 @@ class ReplicaState:
         quorum_fast: List[int],
         quorum_full: List[int],
         live: bool = True,
-        timeout: int = 1,
+        timeout: int = 3,
         jiffies: int = 33,
         timeout_range: int = 3,
         checkpoint_each: int = 10,

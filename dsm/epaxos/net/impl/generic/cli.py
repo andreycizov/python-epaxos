@@ -48,11 +48,7 @@ def replica_server(cls: ClassVar[ReplicaServer], epoch: int, replica_id: int, re
     # for i in range(5):
     #     print(pr.calibrate(10000))
     def receive_signal(*args):
-        import sys
-        logger.info('Writing results')
-        if profile:
-            pr.disable()
-            pr.dump_stats(f'{replica_id}.profile')
+        raise KeyboardInterrupt()
         sys.exit()
 
     signal.signal(signal.SIGTERM, receive_signal)
